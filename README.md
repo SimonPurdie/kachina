@@ -72,8 +72,9 @@ npm run package:win:desktop
 
 Notes:
 
-- The window/taskbar icon uses `src/renderer/assets/kachina-twirly-icon.svg`, converted to `.ico` during packaging.
-- A generated icon is also written to `build/icons/kachina.ico` for local development runs.
+- If `build/icons/kachina.ico` exists, packaging uses it as-is (best for preserving alpha/channel details).
+- Otherwise, packaging generates `build/icons/kachina.ico` from `src/renderer/assets/kachina-twirly-icon.png` (or SVG as fallback).
+- The icon is copied to `resources/assets/kachina.ico`, used by shortcuts, and stamped into `Kachina.exe` resources.
 
 ## License
 
