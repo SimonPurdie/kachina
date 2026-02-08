@@ -134,6 +134,7 @@ export interface KachinaApi {
   unstageFile: (repoId: string, filePath: string) => Promise<RepoActionResult>;
   commitRepo: (repoId: string, message: string) => Promise<RepoActionResult>;
   pushRepo: (repoId: string) => Promise<RepoActionResult>;
+  syncRepo: (repoId: string) => Promise<RepoActionResult>;
   openInEditor: (repoId: string) => Promise<RepoActionResult>;
   openInFileManager: (repoId: string) => Promise<RepoActionResult>;
   openInTerminal: (repoId: string) => Promise<RepoActionResult>;

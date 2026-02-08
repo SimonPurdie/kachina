@@ -98,6 +98,13 @@ export function App(): JSX.Element {
     });
   }, [snapshot, filter]);
 
+  const hasChangedFiles = Boolean(selectedRepo?.status?.changedFiles.length);
+  const needsSync = Boolean(
+    selectedRepo?.status && (selectedRepo.status.ahead > 0 || selectedRepo.status.behind > 0)
+  );
+  const primaryActionLabel = hasChangedFiles ? "Commit" : needsSync ? "Sync" : "Synced";
+  const primaryActionDisabled = isBusy || (!hasChangedFiles && !needsSync);
+
   useEffect(() => {
     void loadSnapshot();
   }, []);
@@ -258,6 +265,21 @@ export function App(): JSX.Element {
       setMessage(`Settings update failed: ${(error as Error).message}`);
     } finally {
       setIsBusy(false);
+    }
+  }
+
+  async function handlePrimaryRepoAction(): Promise<void> {
+    if (!selectedRepo?.status) {
+      return;
+    }
+
+    if (selectedRepo.status.changedFiles.length > 0) {
+      await performAction(requireApi().commitRepo(selectedRepo.id, commitMessage));
+      return;
+    }
+
+    if (selectedRepo.status.ahead > 0 || selectedRepo.status.behind > 0) {
+      await performAction(requireApi().syncRepo(selectedRepo.id));
     }
   }
 
@@ -437,7 +459,7 @@ export function App(): JSX.Element {
                 </section>
 
                 <section className="card">
-                  <h3>Commit & Push</h3>
+                  <h3>Actions</h3>
                   <textarea
                     rows={3}
                     value={commitMessage}
@@ -446,16 +468,10 @@ export function App(): JSX.Element {
                   />
                   <div className="inline-actions">
                     <button
-                      onClick={() => performAction(requireApi().commitRepo(selectedRepo.id, commitMessage))}
-                      disabled={isBusy}
+                      onClick={() => void handlePrimaryRepoAction()}
+                      disabled={primaryActionDisabled}
                     >
-                      Commit
-                    </button>
-                    <button
-                      onClick={() => performAction(requireApi().pushRepo(selectedRepo.id))}
-                      disabled={isBusy}
-                    >
-                      Push
+                      {primaryActionLabel}
                     </button>
                   </div>
                 </section>

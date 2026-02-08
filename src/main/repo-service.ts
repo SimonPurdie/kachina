@@ -423,6 +423,47 @@ export class RepoService {
     return await this.runGitAction(repoId, "Push", ["push", "--porcelain"], 90_000);
   }
 
+  async syncRepo(repoId: string): Promise<RepoActionResult> {
+    const repo = this.getRepo(repoId);
+    try {
+      let transcript: CommandTranscript | undefined;
+      await this.queue.enqueue(
+        repo.id,
+        "Sync",
+        async (signal) => {
+          const steps: Array<{ args: string[]; timeoutMs: number }> = [
+            { args: ["fetch", "--all", "--prune"], timeoutMs: 60_000 },
+            { args: ["pull"], timeoutMs: 90_000 },
+            { args: ["push", "--porcelain"], timeoutMs: 90_000 }
+          ];
+
+          for (const step of steps) {
+            transcript = await runGitCommand(repo.environment, repo.path, step.args, {
+              signal,
+              timeoutMs: step.timeoutMs
+            });
+            this.pushTranscript(repo, transcript);
+          }
+
+          await this.refreshRepoDirect(repo, signal);
+          repo.lastError = null;
+          repo.lastErrorTranscript = null;
+          repo.updatedAt = nowIso();
+          await this.persist();
+        },
+        255_000
+      );
+      return {
+        ok: true,
+        message: "Sync completed.",
+        transcript,
+        snapshot: this.getSnapshot()
+      };
+    } catch (error) {
+      return await this.handleActionFailure(repo, "Sync failed.", error);
+    }
+  }
+
   async openInEditor(repoId: string): Promise<RepoActionResult> {
     const repo = this.getRepo(repoId);
     try {

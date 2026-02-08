@@ -25,6 +25,7 @@ export function registerIpcHandlers(service: RepoService): void {
     service.commitRepo(repoId, message)
   );
   ipcMain.handle("kachina:pushRepo", async (_event, repoId: string) => service.pushRepo(repoId));
+  ipcMain.handle("kachina:syncRepo", async (_event, repoId: string) => service.syncRepo(repoId));
   ipcMain.handle("kachina:openInEditor", async (_event, repoId: string) =>
     service.openInEditor(repoId)
   );

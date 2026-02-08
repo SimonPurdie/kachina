@@ -14,6 +14,7 @@ const api: KachinaApi = {
     ipcRenderer.invoke("kachina:unstageFile", repoId, filePath),
   commitRepo: (repoId, message) => ipcRenderer.invoke("kachina:commitRepo", repoId, message),
   pushRepo: (repoId) => ipcRenderer.invoke("kachina:pushRepo", repoId),
+  syncRepo: (repoId) => ipcRenderer.invoke("kachina:syncRepo", repoId),
   openInEditor: (repoId) => ipcRenderer.invoke("kachina:openInEditor", repoId),
   openInFileManager: (repoId) => ipcRenderer.invoke("kachina:openInFileManager", repoId),
   openInTerminal: (repoId) => ipcRenderer.invoke("kachina:openInTerminal", repoId),
