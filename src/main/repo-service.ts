@@ -433,7 +433,7 @@ export class RepoService {
         async (signal) => {
           const steps: Array<{ args: string[]; timeoutMs: number }> = [
             { args: ["fetch", "--all", "--prune"], timeoutMs: 60_000 },
-            { args: ["pull"], timeoutMs: 90_000 },
+            { args: ["pull", "--rebase"], timeoutMs: 90_000 },
             { args: ["push", "--porcelain"], timeoutMs: 90_000 }
           ];
 

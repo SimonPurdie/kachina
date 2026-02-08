@@ -80,6 +80,8 @@ export function App(): JSX.Element {
   );
   const primaryActionLabel = hasChangedFiles ? "Commit" : needsSync ? "Sync" : "Synced";
   const primaryActionDisabled = isBusy || (!hasChangedFiles && !needsSync);
+  const statusMessage = message || "Let's go, Twirly!";
+  const isPlaceholderMessage = !message;
 
   useEffect(() => {
     void loadSnapshot();
@@ -221,8 +223,8 @@ export function App(): JSX.Element {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Kachina</p>
-          <h1>Multi-Repo Git Dashboard</h1>
+          <p className="eyebrow">Multi-Repo Git Dashboard</p>
+          <h1>Kachina</h1>
         </div>
         <div className="topbar-actions">
           <button onClick={refreshAll} disabled={isBusy}>
@@ -234,7 +236,9 @@ export function App(): JSX.Element {
         </div>
       </header>
 
-      {message && <div className="message-strip">{message}</div>}
+      <div className={`message-strip${isPlaceholderMessage ? " placeholder" : ""}`}>
+        {statusMessage}
+      </div>
 
       <main className="layout">
         <aside className="repo-panel">
@@ -479,10 +483,11 @@ export function App(): JSX.Element {
           <section className="card">
             <h3>Discovery Settings</h3>
             {settingsEditor && (
-              <form onSubmit={saveSettings} className="stack-form">
+              <form onSubmit={saveSettings} className="stack-form discovery-form">
                 <label>
                   Windows roots (one path per line)
                   <textarea
+                    className="discovery-textarea"
                     rows={3}
                     value={settingsEditor.windowsRootsText}
                     onChange={(event) =>
@@ -495,6 +500,7 @@ export function App(): JSX.Element {
                 <label>
                   WSL roots (`distro:/path`, one per line)
                   <textarea
+                    className="discovery-textarea"
                     rows={3}
                     value={settingsEditor.wslRootsText}
                     onChange={(event) =>
@@ -507,6 +513,7 @@ export function App(): JSX.Element {
                 <label>
                   Ignore patterns (one token per line)
                   <textarea
+                    className="discovery-textarea"
                     rows={3}
                     value={settingsEditor.ignorePatternsText}
                     onChange={(event) =>
@@ -527,4 +534,3 @@ export function App(): JSX.Element {
     </div>
   );
 }
-
