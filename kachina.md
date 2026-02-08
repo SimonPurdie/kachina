@@ -34,7 +34,7 @@ Avoid relying on Windows treating WSL repos “as just files” for core operati
 
 ## Status Summary (What the Dashboard Surfaces)
 For each repository, show:
-- “Needs attention” = dirty OR staged OR untracked OR ahead>0 OR error state
+- “Needs attention” = dirty OR staged OR untracked OR ahead>0 OR behind>0 OR error state
 - Working tree state:
   - clean vs modified
   - staged changes present

@@ -156,7 +156,7 @@ function parseStatusOutput(stdout: string): Omit<RepoStatusSummary, "refreshedAt
   const hasStaged = stagedCount > 0;
   const hasUntracked = untrackedCount > 0;
   const isDirty = stagedCount > 0 || modifiedCount > 0 || untrackedCount > 0;
-  const needsAttention = isDirty || ahead > 0 || conflictedCount > 0;
+  const needsAttention = isDirty || ahead > 0 || behind > 0 || conflictedCount > 0;
 
   return {
     needsAttention,
