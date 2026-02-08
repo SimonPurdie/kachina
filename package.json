@@ -12,6 +12,9 @@
     "build": "npm run build:renderer && npm run build:main",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
+    "package:win": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1",
+    "package:win:skip-build": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -SkipBuild",
+    "package:win:desktop": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -CreateDesktopShortcut",
     "start": "electron .",
     "typecheck": "tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.main.json --noEmit"
   },

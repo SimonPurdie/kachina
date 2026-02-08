@@ -3,3 +3,5 @@ dist
 dist-electron
 *.log
 *.tmp
+release
+build/icons

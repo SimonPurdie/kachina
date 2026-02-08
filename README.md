@@ -51,6 +51,30 @@ npm run build
 npm run start
 ```
 
+## Package For Windows (Double-Click App)
+
+```powershell
+npm run package:win
+```
+
+This creates a portable app at:
+
+- `release/win-unpacked/Kachina/Kachina.exe`
+- `release/win-unpacked/Kachina.lnk` (shortcut with icon)
+
+You can double-click `Kachina.lnk` or `Kachina.exe` to launch the app.
+
+If you also want a Desktop icon automatically:
+
+```powershell
+npm run package:win:desktop
+```
+
+Notes:
+
+- The window/taskbar icon uses `src/renderer/assets/kachina-twirly-icon.svg`, converted to `.ico` during packaging.
+- A generated icon is also written to `build/icons/kachina.ico` for local development runs.
+
 ## License
 
 MIT. See `LICENSE`.

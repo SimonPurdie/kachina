@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import * as fs from "node:fs";
 import { app, BrowserWindow, Menu } from "electron";
 import { JsonStateStore } from "./storage";
 import { RepoService } from "./repo-service";
@@ -7,8 +8,21 @@ import { registerIpcHandlers } from "./ipc";
 let mainWindow: BrowserWindow | null = null;
 let service: RepoService | null = null;
 
+function resolveWindowIcon(): string | undefined {
+  if (process.platform !== "win32") {
+    return undefined;
+  }
+
+  const candidates = app.isPackaged
+    ? [path.join(process.resourcesPath, "assets", "kachina.ico")]
+    : [path.join(process.cwd(), "build", "icons", "kachina.ico")];
+
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
 async function createMainWindow(): Promise<void> {
   const preloadPath = path.join(__dirname, "../preload/index.js");
+  const iconPath = resolveWindowIcon();
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -18,6 +32,7 @@ async function createMainWindow(): Promise<void> {
     titleBarStyle: "hidden",
     autoHideMenuBar: true,
     backgroundColor: "#f7f4ec",
+    ...(iconPath ? { icon: iconPath } : {}),
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -63,6 +78,11 @@ async function bootstrap(): Promise<void> {
   service.startAutoRefresh();
   await createMainWindow();
   void service.refreshAll();
+}
+
+app.setName("Kachina");
+if (process.platform === "win32") {
+  app.setAppUserModelId("com.kachina.desktop");
 }
 
 app.whenReady().then(() => {
