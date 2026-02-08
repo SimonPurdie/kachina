@@ -50,6 +50,8 @@ export function App(): JSX.Element {
   const [settingsEditor, setSettingsEditor] = useState<SettingsEditor | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
+  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(true);
+  const [isSettingsPanelAnimating, setIsSettingsPanelAnimating] = useState(false);
 
   const selectedRepo = useMemo(
     () => snapshot?.repos.find((repo) => repo.id === selectedRepoId) ?? null,
@@ -126,6 +128,20 @@ export function App(): JSX.Element {
       return;
     }
   }, [snapshot, selectedRepoId]);
+
+  useEffect(() => {
+    if (!isSettingsPanelAnimating) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsSettingsPanelAnimating(false);
+    }, 360);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isSettingsPanelAnimating, isSettingsPanelOpen]);
 
   async function loadSnapshot(): Promise<void> {
     setIsBusy(true);
@@ -266,6 +282,11 @@ export function App(): JSX.Element {
     await requireApi().windowClose();
   }
 
+  function handleSettingsToggle(): void {
+    setIsSettingsPanelAnimating(true);
+    setIsSettingsPanelOpen((current) => !current);
+  }
+
   return (
     <div className="app-shell">
       <header className="window-titlebar">
@@ -319,10 +340,33 @@ export function App(): JSX.Element {
           </div>
         </header>
 
-        <div className={`message-strip${isPlaceholderMessage ? " placeholder" : ""}`}>
-          {statusMessage}
+        <div className="message-row">
+          <div className={`message-strip${isPlaceholderMessage ? " placeholder" : ""}`}>
+            {statusMessage}
+          </div>
+          <button
+            type="button"
+            className={`settings-toggle${isSettingsPanelOpen ? " pressed" : ""}${
+              isSettingsPanelAnimating ? " animating" : ""
+            }`}
+            aria-label={isSettingsPanelOpen ? "Hide settings panel" : "Show settings panel"}
+            aria-pressed={isSettingsPanelOpen}
+            onClick={handleSettingsToggle}
+          >
+            <svg
+              className="settings-cog"
+              viewBox="0 0 24 24"
+              role="img"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="12" cy="12" r="3.45" />
+              <circle cx="12" cy="12" r="7.15" />
+              <path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3M4.1 4.1l2.1 2.1M17.8 17.8l2.1 2.1M19.9 4.1l-2.1 2.1M6.2 17.8l-2.1 2.1" />
+            </svg>
+          </button>
         </div>
-        <main className="layout">
+        <main className={`layout ${isSettingsPanelOpen ? "settings-open" : "settings-closed"}`}>
           <aside className="repo-panel">
             <div className="filter-row">
               <button
