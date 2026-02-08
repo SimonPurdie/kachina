@@ -208,6 +208,13 @@ h3 {
   gap: 0.5rem;
 }
 
+.repo-card-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .repo-meta {
   margin: 0.2rem 0;
   color: var(--accent-strong);
@@ -223,10 +230,14 @@ h3 {
 
 .state-pill {
   display: inline-flex;
+  flex: 0 0 8.2rem;
   border-radius: 999px;
   padding: 0.18rem 0.52rem;
   font-size: 0.68rem;
   font-weight: 700;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .state-pill.warn {
@@ -249,15 +260,27 @@ h3 {
 
 .detail-header {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.8rem;
   margin-bottom: 0.8rem;
+}
+
+.detail-title {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .detail-actions {
   display: grid;
   gap: 0.38rem;
   align-content: start;
+  flex: 0 0 10.5rem;
+  width: 10.5rem;
+}
+
+.detail-actions button {
+  width: 100%;
 }
 
 .operation-banner {
@@ -274,7 +297,7 @@ h3 {
 
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
   margin-bottom: 0.75rem;
 }
@@ -298,10 +321,13 @@ h3 {
   color: var(--muted);
 }
 
-.inline-form,
 .inline-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.inline-actions button {
+  width: 100%;
 }
 
 .files-table {
@@ -321,6 +347,15 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.files-table th:last-child,
+.files-table td:last-child {
+  width: 8rem;
+}
+
+.files-table td:last-child button {
+  width: 100%;
+}
+
 .stack-form {
   display: grid;
   gap: 0.45rem;
@@ -331,17 +366,6 @@ h3 {
   gap: 0.2rem;
   font-size: 0.8rem;
   color: var(--muted);
-}
-
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--ink);
-}
-
-.checkbox-row input {
-  width: auto;
 }
 
 .empty-state {

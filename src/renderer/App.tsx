@@ -1,6 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type {
-  AddRepoInput,
   DashboardSnapshot,
   KachinaApi,
   RepoActionResult,
@@ -9,39 +8,17 @@ import type {
 
 type RepoFilter = "all" | "attention" | "dirty" | "ahead";
 
-interface ManualRepoForm {
-  displayName: string;
-  path: string;
-  environment: "windows" | "wsl";
-  distro: string;
-}
-
 interface SettingsEditor {
   windowsRootsText: string;
   wslRootsText: string;
   ignorePatternsText: string;
-  editorCommandWindows: string;
-  editorCommandWsl: string;
-  refreshIntervalSeconds: number;
-  fetchOnRefresh: boolean;
 }
-
-const emptyManualForm: ManualRepoForm = {
-  displayName: "",
-  path: "",
-  environment: "windows",
-  distro: ""
-};
 
 function toSettingsEditor(snapshot: DashboardSnapshot): SettingsEditor {
   return {
     windowsRootsText: snapshot.settings.windowsRoots.join("\n"),
     wslRootsText: snapshot.settings.wslRoots.map((item) => `${item.distro}:${item.path}`).join("\n"),
-    ignorePatternsText: snapshot.settings.ignorePatterns.join("\n"),
-    editorCommandWindows: snapshot.settings.editorCommandWindows,
-    editorCommandWsl: snapshot.settings.editorCommandWsl,
-    refreshIntervalSeconds: snapshot.settings.refreshIntervalSeconds,
-    fetchOnRefresh: snapshot.settings.fetchOnRefresh
+    ignorePatternsText: snapshot.settings.ignorePatterns.join("\n")
   };
 }
 
@@ -67,7 +44,6 @@ export function App(): JSX.Element {
   const [filter, setFilter] = useState<RepoFilter>("attention");
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState<string>("");
-  const [manualForm, setManualForm] = useState<ManualRepoForm>(emptyManualForm);
   const [settingsEditor, setSettingsEditor] = useState<SettingsEditor | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
 
@@ -180,44 +156,6 @@ export function App(): JSX.Element {
     }
   }
 
-  async function handleAddRepo(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    const form = {
-      ...manualForm,
-      path: manualForm.path.trim(),
-      displayName: manualForm.displayName.trim(),
-      distro: manualForm.distro.trim()
-    };
-    if (!form.path) {
-      setMessage("Path is required.");
-      return;
-    }
-    if (form.environment === "wsl" && !form.distro) {
-      setMessage("WSL distro is required for WSL repos.");
-      return;
-    }
-    const payload: AddRepoInput = {
-      path: form.path,
-      displayName: form.displayName || undefined,
-      environment:
-        form.environment === "windows"
-          ? { kind: "windows" }
-          : { kind: "wsl", distro: form.distro }
-    };
-
-    setIsBusy(true);
-    try {
-      const next = await requireApi().addRepo(payload);
-      setSnapshot(next);
-      setManualForm(emptyManualForm);
-      setMessage("Repository added.");
-    } catch (error) {
-      setMessage(`Add repo failed: ${(error as Error).message}`);
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
   async function saveSettings(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (!settingsEditor) {
@@ -253,11 +191,7 @@ export function App(): JSX.Element {
       const next = await requireApi().updateSettings({
         windowsRoots,
         wslRoots,
-        ignorePatterns,
-        editorCommandWindows: settingsEditor.editorCommandWindows,
-        editorCommandWsl: settingsEditor.editorCommandWsl,
-        refreshIntervalSeconds: Math.max(30, settingsEditor.refreshIntervalSeconds),
-        fetchOnRefresh: settingsEditor.fetchOnRefresh
+        ignorePatterns
       });
       setSnapshot(next);
       setMessage("Settings updated.");
@@ -367,11 +301,11 @@ export function App(): JSX.Element {
 
         <section className="detail-panel">
           {!selectedRepo ? (
-            <div className="empty-state">Add or discover repositories to begin.</div>
+            <div className="empty-state">Use Discovery Settings to find repositories.</div>
           ) : (
             <>
               <div className="detail-header">
-                <div>
+                <div className="detail-title">
                   <p className="eyebrow">{formatEnv(selectedRepo)}</p>
                   <h2>{selectedRepo.displayName}</h2>
                   <p className="repo-path">{selectedRepo.path}</p>
@@ -543,51 +477,6 @@ export function App(): JSX.Element {
 
         <aside className="settings-panel">
           <section className="card">
-            <h3>Add Repository</h3>
-            <form onSubmit={handleAddRepo} className="stack-form">
-              <input
-                value={manualForm.displayName}
-                onChange={(event) =>
-                  setManualForm((current) => ({ ...current, displayName: event.target.value }))
-                }
-                placeholder="Display name (optional)"
-              />
-              <input
-                value={manualForm.path}
-                onChange={(event) =>
-                  setManualForm((current) => ({ ...current, path: event.target.value }))
-                }
-                placeholder="Path"
-              />
-              <div className="inline-form">
-                <select
-                  value={manualForm.environment}
-                  onChange={(event) =>
-                    setManualForm((current) => ({
-                      ...current,
-                      environment: event.target.value as "windows" | "wsl"
-                    }))
-                  }
-                >
-                  <option value="windows">Windows</option>
-                  <option value="wsl">WSL</option>
-                </select>
-                <input
-                  value={manualForm.distro}
-                  onChange={(event) =>
-                    setManualForm((current) => ({ ...current, distro: event.target.value }))
-                  }
-                  placeholder="WSL distro"
-                  disabled={manualForm.environment !== "wsl"}
-                />
-              </div>
-              <button type="submit" disabled={isBusy}>
-                Add
-              </button>
-            </form>
-          </section>
-
-          <section className="card">
             <h3>Discovery Settings</h3>
             {settingsEditor && (
               <form onSubmit={saveSettings} className="stack-form">
@@ -626,62 +515,6 @@ export function App(): JSX.Element {
                       )
                     }
                   />
-                </label>
-                <label>
-                  Editor command (Windows)
-                  <input
-                    value={settingsEditor.editorCommandWindows}
-                    onChange={(event) =>
-                      setSettingsEditor((current) =>
-                        current
-                          ? { ...current, editorCommandWindows: event.target.value }
-                          : current
-                      )
-                    }
-                    placeholder="code <path>"
-                  />
-                </label>
-                <label>
-                  Editor command (WSL)
-                  <input
-                    value={settingsEditor.editorCommandWsl}
-                    onChange={(event) =>
-                      setSettingsEditor((current) =>
-                        current ? { ...current, editorCommandWsl: event.target.value } : current
-                      )
-                    }
-                    placeholder="code <path>"
-                  />
-                </label>
-                <label>
-                  Refresh interval (seconds)
-                  <input
-                    type="number"
-                    min={30}
-                    value={settingsEditor.refreshIntervalSeconds}
-                    onChange={(event) =>
-                      setSettingsEditor((current) =>
-                        current
-                          ? {
-                              ...current,
-                              refreshIntervalSeconds: Number.parseInt(event.target.value, 10) || 30
-                            }
-                          : current
-                      )
-                    }
-                  />
-                </label>
-                <label className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={settingsEditor.fetchOnRefresh}
-                    onChange={(event) =>
-                      setSettingsEditor((current) =>
-                        current ? { ...current, fetchOnRefresh: event.target.checked } : current
-                      )
-                    }
-                  />
-                  Run fetch during refresh
                 </label>
                 <button type="submit" disabled={isBusy}>
                   Save Settings
