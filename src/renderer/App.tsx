@@ -5,6 +5,7 @@ import type {
   RepoActionResult,
   RepoRecord
 } from "../shared/types";
+import twirlyIcon from "./assets/kachina-twirly-icon.svg";
 
 type RepoFilter = "all" | "attention" | "dirty" | "ahead";
 
@@ -48,6 +49,7 @@ export function App(): JSX.Element {
   const [message, setMessage] = useState<string>("");
   const [settingsEditor, setSettingsEditor] = useState<SettingsEditor | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
 
   const selectedRepo = useMemo(
     () => snapshot?.repos.find((repo) => repo.id === selectedRepoId) ?? null,
@@ -86,7 +88,31 @@ export function App(): JSX.Element {
   const isPlaceholderMessage = !message;
 
   useEffect(() => {
+    let isMounted = true;
+    const api = requireApi();
+
     void loadSnapshot();
+    void api
+      .isWindowMaximized()
+      .then((next) => {
+        if (isMounted) {
+          setIsWindowMaximized(next);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setIsWindowMaximized(false);
+        }
+      });
+
+    const dispose = api.onWindowStateChanged((next) => {
+      setIsWindowMaximized(next);
+    });
+
+    return () => {
+      isMounted = false;
+      dispose();
+    };
   }, []);
 
   useEffect(() => {
@@ -227,337 +253,387 @@ export function App(): JSX.Element {
     }
   }
 
+  async function handleWindowMinimize(): Promise<void> {
+    await requireApi().windowMinimize();
+  }
+
+  async function handleWindowToggleMaximize(): Promise<void> {
+    const next = await requireApi().windowToggleMaximize();
+    setIsWindowMaximized(next);
+  }
+
+  async function handleWindowClose(): Promise<void> {
+    await requireApi().windowClose();
+  }
+
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Multi-Repo Git Dashboard</p>
-          <h1>Kachina</h1>
+      <header className="window-titlebar">
+        <div className="window-titlebar-brand">
+          <img src={twirlyIcon} alt="" aria-hidden="true" className="window-titlebar-icon" />
+          <div className="window-titlebar-copy">
+            <strong>Kachina</strong>
+          </div>
         </div>
-        <div className="topbar-actions">
-          <button onClick={refreshAll} disabled={isBusy}>
-            Refresh All
+        <div className="window-titlebar-controls">
+          <button
+            type="button"
+            className="window-control"
+            aria-label="Minimize window"
+            onClick={() => void handleWindowMinimize()}
+          >
+            <span className="window-control-icon minimize" />
           </button>
-          <button onClick={scanConfiguredRoots} disabled={isBusy}>
-            Scan Roots
+          <button
+            type="button"
+            className="window-control"
+            aria-label={isWindowMaximized ? "Restore window" : "Maximize window"}
+            onClick={() => void handleWindowToggleMaximize()}
+          >
+            <span className={`window-control-icon ${isWindowMaximized ? "restore" : "maximize"}`} />
+          </button>
+          <button
+            type="button"
+            className="window-control close"
+            aria-label="Close window"
+            onClick={() => void handleWindowClose()}
+          >
+            <span className="window-control-icon close" />
           </button>
         </div>
       </header>
 
-      <div className={`message-strip${isPlaceholderMessage ? " placeholder" : ""}`}>
-        {statusMessage}
-      </div>
-
-      <main className="layout">
-        <aside className="repo-panel">
-          <div className="filter-row">
-            <button
-              className={filter === "attention" ? "active" : ""}
-              onClick={() => setFilter("attention")}
-            >
-              Attention
+      <div className="app-content">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Multi-Repo Git Dashboard</p>
+            <h1>Kachina</h1>
+          </div>
+          <div className="topbar-actions">
+            <button onClick={refreshAll} disabled={isBusy}>
+              Refresh All
             </button>
-            <button
-              className={filter === "dirty" ? "active" : ""}
-              onClick={() => setFilter("dirty")}
-            >
-              Dirty
-            </button>
-            <button
-              className={filter === "ahead" ? "active" : ""}
-              onClick={() => setFilter("ahead")}
-            >
-              Ahead
-            </button>
-            <button
-              className={filter === "all" ? "active" : ""}
-              onClick={() => setFilter("all")}
-            >
-              All
+            <button onClick={scanConfiguredRoots} disabled={isBusy}>
+              Scan Roots
             </button>
           </div>
+        </header>
 
-          <div className="repo-list">
-            {filteredRepos.map((repo) => {
-              const isActive = repo.id === selectedRepoId;
-              return (
-                <button
-                  key={repo.id}
-                  className={`repo-card ${isActive ? "selected" : ""}`}
-                  onClick={() => setSelectedRepoId(repo.id)}
-                >
-                  <div className="repo-card-head">
-                    <strong>{repo.displayName}</strong>
-                    <span className={`state-pill ${repo.status?.needsAttention ? "warn" : "ok"}`}>
-                      {repo.status?.needsAttention ? "Needs Attention" : "Clean"}
-                    </span>
-                  </div>
-                  <p className="repo-meta">{formatEnv(repo)}</p>
-                  <p className="repo-path">{repo.path}</p>
-                  {repo.status && (
-                    <div className="repo-stats">
-                      <span>Branch {repo.status.branch}</span>
-                      <span>Staged {repo.status.stagedCount}</span>
-                      <span>Changed {repo.status.modifiedCount}</span>
-                      <span>Untracked {repo.status.untrackedCount}</span>
-                      <span>
-                        Ahead/Behind {repo.status.ahead}/{repo.status.behind}
+        <div className={`message-strip${isPlaceholderMessage ? " placeholder" : ""}`}>
+          {statusMessage}
+        </div>
+        <main className="layout">
+          <aside className="repo-panel">
+            <div className="filter-row">
+              <button
+                className={filter === "attention" ? "active" : ""}
+                onClick={() => setFilter("attention")}
+              >
+                Attention
+              </button>
+              <button
+                className={filter === "dirty" ? "active" : ""}
+                onClick={() => setFilter("dirty")}
+              >
+                Dirty
+              </button>
+              <button
+                className={filter === "ahead" ? "active" : ""}
+                onClick={() => setFilter("ahead")}
+              >
+                Ahead
+              </button>
+              <button
+                className={filter === "all" ? "active" : ""}
+                onClick={() => setFilter("all")}
+              >
+                All
+              </button>
+            </div>
+
+            <div className="repo-list">
+              {filteredRepos.map((repo) => {
+                const isActive = repo.id === selectedRepoId;
+                return (
+                  <button
+                    key={repo.id}
+                    className={`repo-card ${isActive ? "selected" : ""}`}
+                    onClick={() => setSelectedRepoId(repo.id)}
+                  >
+                    <div className="repo-card-head">
+                      <strong>{repo.displayName}</strong>
+                      <span className={`state-pill ${repo.status?.needsAttention ? "warn" : "ok"}`}>
+                        {repo.status?.needsAttention ? "Needs Attention" : "Clean"}
                       </span>
                     </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </aside>
+                    <p className="repo-meta">{formatEnv(repo)}</p>
+                    <p className="repo-path">{repo.path}</p>
+                    {repo.status && (
+                      <div className="repo-stats">
+                        <span>Branch {repo.status.branch}</span>
+                        <span>Staged {repo.status.stagedCount}</span>
+                        <span>Changed {repo.status.modifiedCount}</span>
+                        <span>Untracked {repo.status.untrackedCount}</span>
+                        <span>
+                          Ahead/Behind {repo.status.ahead}/{repo.status.behind}
+                        </span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
 
-        <section className="detail-panel">
-          {!selectedRepo ? (
-            <div className="empty-state">Use Discovery Settings to find repositories.</div>
-          ) : (
-            <>
-              <div className="detail-header">
-                <div className="detail-title">
-                  <p className="eyebrow">{formatEnv(selectedRepo)}</p>
-                  <h2>{selectedRepo.displayName}</h2>
-                  <p className="repo-path">{selectedRepo.path}</p>
-                </div>
-                <div className="detail-actions">
-                  <button onClick={() => performAction(requireApi().openInEditor(selectedRepo.id))}>
-                    Open Editor
-                  </button>
-                  <button
-                    onClick={() => performAction(requireApi().openInFileManager(selectedRepo.id))}
-                  >
-                    Open Folder
-                  </button>
-                  <button onClick={() => performAction(requireApi().openInTerminal(selectedRepo.id))}>
-                    Open Shell
-                  </button>
-                  <button
-                    className="danger"
-                    onClick={async () => {
-                      setIsBusy(true);
-                      try {
-                        const next = await requireApi().removeRepo(selectedRepo.id);
-                        setSnapshot(next);
-                        setSettingsEditor(toSettingsEditor(next));
-                        setMessage("Repository removed and added to ignored repos.");
-                      } catch (error) {
-                        setMessage((error as Error).message);
-                      } finally {
-                        setIsBusy(false);
-                      }
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-
-              {selectedRepo.activeOperation && (
-                <div className="operation-banner">
-                  <span>
-                    In progress: {selectedRepo.activeOperation.name} since{" "}
-                    {new Date(selectedRepo.activeOperation.startedAt).toLocaleTimeString()}
-                  </span>
-                  <button
-                    className="danger"
-                    onClick={async () => {
-                      const next = await requireApi().cancelRepoOperation(selectedRepo.id);
-                      setSnapshot(next);
-                      setMessage("Cancel requested.");
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-
-              <div className="detail-grid">
-                <section className="card">
-                  <h3>Status</h3>
-                  <div className="status-grid">
-                    <span>Branch</span>
-                    <span>{selectedRepo.status?.branch ?? "Unknown"}</span>
-                    <span>Upstream</span>
-                    <span>{selectedRepo.status?.hasUpstream ? "Configured" : "None"}</span>
-                    <span>Ahead/Behind</span>
-                    <span>
-                      {selectedRepo.status?.ahead ?? 0}/{selectedRepo.status?.behind ?? 0}
-                    </span>
-                    <span>Dirty</span>
-                    <span>{selectedRepo.status?.isDirty ? "Yes" : "No"}</span>
-                    <span>Merge/Rebase</span>
-                    <span>
-                      {selectedRepo.status?.mergeInProgress ? "Merge " : ""}
-                      {selectedRepo.status?.rebaseInProgress ? "Rebase" : ""}
-                      {!selectedRepo.status?.mergeInProgress && !selectedRepo.status?.rebaseInProgress
-                        ? "None"
-                        : ""}
-                    </span>
-                    <span>Last Refresh</span>
-                    <span>
-                      {selectedRepo.status?.refreshedAt
-                        ? new Date(selectedRepo.status.refreshedAt).toLocaleString()
-                        : "Never"}
-                    </span>
+          <section className="detail-panel">
+            {!selectedRepo ? (
+              <div className="empty-state">Use Discovery Settings to find repositories.</div>
+            ) : (
+              <>
+                <div className="detail-header">
+                  <div className="detail-title">
+                    <p className="eyebrow">{formatEnv(selectedRepo)}</p>
+                    <h2>{selectedRepo.displayName}</h2>
+                    <p className="repo-path">{selectedRepo.path}</p>
                   </div>
-                </section>
-
-                <section className="card">
-                  <h3>Actions</h3>
-                  <textarea
-                    rows={3}
-                    spellCheck={false}
-                    value={commitMessage}
-                    onChange={(event) => setCommitMessage(event.target.value)}
-                    placeholder="Commit message"
-                  />
-                  <div className="inline-actions">
+                  <div className="detail-actions">
+                    <button onClick={() => performAction(requireApi().openInEditor(selectedRepo.id))}>
+                      Open Editor
+                    </button>
                     <button
-                      onClick={() => void handlePrimaryRepoAction()}
-                      disabled={primaryActionDisabled}
+                      onClick={() => performAction(requireApi().openInFileManager(selectedRepo.id))}
                     >
-                      {primaryActionLabel}
+                      Open Folder
+                    </button>
+                    <button onClick={() => performAction(requireApi().openInTerminal(selectedRepo.id))}>
+                      Open Shell
+                    </button>
+                    <button
+                      className="danger"
+                      onClick={async () => {
+                        setIsBusy(true);
+                        try {
+                          const next = await requireApi().removeRepo(selectedRepo.id);
+                          setSnapshot(next);
+                          setSettingsEditor(toSettingsEditor(next));
+                          setMessage("Repository removed and added to ignored repos.");
+                        } catch (error) {
+                          setMessage((error as Error).message);
+                        } finally {
+                          setIsBusy(false);
+                        }
+                      }}
+                    >
+                      Remove
                     </button>
                   </div>
-                </section>
-              </div>
+                </div>
 
-              <section className="card">
-                <h3>Changed Files</h3>
-                {selectedRepo.status?.changedFiles.length ? (
-                  <table className="files-table">
-                    <thead>
-                      <tr>
-                        <th>Path</th>
-                        <th>Index</th>
-                        <th>Worktree</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedRepo.status.changedFiles.map((file) => (
-                        <tr key={`${file.path}_${file.indexStatus}_${file.worktreeStatus}`}>
-                          <td>{file.path}</td>
-                          <td>{file.indexStatus}</td>
-                          <td>{file.worktreeStatus}</td>
-                          <td>
-                            {file.isStaged ? (
-                              <button
-                                onClick={() =>
-                                  performAction(requireApi().unstageFile(selectedRepo.id, file.path))
-                                }
-                                disabled={isBusy}
-                              >
-                                Unstage
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() =>
-                                  performAction(requireApi().stageFile(selectedRepo.id, file.path))
-                                }
-                                disabled={isBusy}
-                              >
-                                Stage
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p>No changed files.</p>
+                {selectedRepo.activeOperation && (
+                  <div className="operation-banner">
+                    <span>
+                      In progress: {selectedRepo.activeOperation.name} since{" "}
+                      {new Date(selectedRepo.activeOperation.startedAt).toLocaleTimeString()}
+                    </span>
+                    <button
+                      className="danger"
+                      onClick={async () => {
+                        const next = await requireApi().cancelRepoOperation(selectedRepo.id);
+                        setSnapshot(next);
+                        setMessage("Cancel requested.");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 )}
-              </section>
 
-              {selectedRepo.lastErrorTranscript && (
-                <details className="card">
-                  <summary>Last Error Transcript</summary>
-                  <pre>
-                    {selectedRepo.lastErrorTranscript.command}
-                    {"\n\n"}
-                    {selectedRepo.lastErrorTranscript.stderr || "(no stderr)"}
-                    {"\n\n"}
-                    {selectedRepo.lastErrorTranscript.stdout || "(no stdout)"}
-                  </pre>
-                </details>
-              )}
-            </>
-          )}
-        </section>
+                <div className="detail-grid">
+                  <section className="card">
+                    <h3>Status</h3>
+                    <div className="status-grid">
+                      <span>Branch</span>
+                      <span>{selectedRepo.status?.branch ?? "Unknown"}</span>
+                      <span>Upstream</span>
+                      <span>{selectedRepo.status?.hasUpstream ? "Configured" : "None"}</span>
+                      <span>Ahead/Behind</span>
+                      <span>
+                        {selectedRepo.status?.ahead ?? 0}/{selectedRepo.status?.behind ?? 0}
+                      </span>
+                      <span>Dirty</span>
+                      <span>{selectedRepo.status?.isDirty ? "Yes" : "No"}</span>
+                      <span>Merge/Rebase</span>
+                      <span>
+                        {selectedRepo.status?.mergeInProgress ? "Merge " : ""}
+                        {selectedRepo.status?.rebaseInProgress ? "Rebase" : ""}
+                        {!selectedRepo.status?.mergeInProgress &&
+                        !selectedRepo.status?.rebaseInProgress
+                          ? "None"
+                          : ""}
+                      </span>
+                      <span>Last Refresh</span>
+                      <span>
+                        {selectedRepo.status?.refreshedAt
+                          ? new Date(selectedRepo.status.refreshedAt).toLocaleString()
+                          : "Never"}
+                      </span>
+                    </div>
+                  </section>
 
-        <aside className="settings-panel">
-          <section className="card">
-            <h3>Discovery Settings</h3>
-            {settingsEditor && (
-              <form onSubmit={saveSettings} className="stack-form discovery-form">
-                <label>
-                  Windows roots (one path per line)
-                  <textarea
-                    className="discovery-textarea"
-                    rows={3}
-                    spellCheck={false}
-                    value={settingsEditor.windowsRootsText}
-                    onChange={(event) =>
-                      setSettingsEditor((current) =>
-                        current ? { ...current, windowsRootsText: event.target.value } : current
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  WSL roots (`distro:/path`, one per line)
-                  <textarea
-                    className="discovery-textarea"
-                    rows={3}
-                    spellCheck={false}
-                    value={settingsEditor.wslRootsText}
-                    onChange={(event) =>
-                      setSettingsEditor((current) =>
-                        current ? { ...current, wslRootsText: event.target.value } : current
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  Ignore patterns (one token per line)
-                  <textarea
-                    className="discovery-textarea"
-                    rows={3}
-                    spellCheck={false}
-                    value={settingsEditor.ignorePatternsText}
-                    onChange={(event) =>
-                      setSettingsEditor((current) =>
-                        current ? { ...current, ignorePatternsText: event.target.value } : current
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  Ignored repos (`windows:C:\repo` or `wsl:distro:/path`, one per line)
-                  <textarea
-                    className="discovery-textarea"
-                    rows={3}
-                    spellCheck={false}
-                    value={settingsEditor.ignoredReposText}
-                    onChange={(event) =>
-                      setSettingsEditor((current) =>
-                        current ? { ...current, ignoredReposText: event.target.value } : current
-                      )
-                    }
-                  />
-                </label>
-                <button type="submit" disabled={isBusy}>
-                  Save Settings
-                </button>
-              </form>
+                  <section className="card">
+                    <h3>Actions</h3>
+                    <textarea
+                      rows={3}
+                      spellCheck={false}
+                      value={commitMessage}
+                      onChange={(event) => setCommitMessage(event.target.value)}
+                      placeholder="Commit message"
+                    />
+                    <div className="inline-actions">
+                      <button
+                        onClick={() => void handlePrimaryRepoAction()}
+                        disabled={primaryActionDisabled}
+                      >
+                        {primaryActionLabel}
+                      </button>
+                    </div>
+                  </section>
+                </div>
+
+                <section className="card changed-files-card">
+                  <h3>Changed Files</h3>
+                  {selectedRepo.status?.changedFiles.length ? (
+                    <table className="files-table">
+                      <thead>
+                        <tr>
+                          <th>Path</th>
+                          <th>Index</th>
+                          <th>Worktree</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedRepo.status.changedFiles.map((file) => (
+                          <tr key={`${file.path}_${file.indexStatus}_${file.worktreeStatus}`}>
+                            <td>{file.path}</td>
+                            <td>{file.indexStatus}</td>
+                            <td>{file.worktreeStatus}</td>
+                            <td>
+                              {file.isStaged ? (
+                                <button
+                                  onClick={() =>
+                                    performAction(requireApi().unstageFile(selectedRepo.id, file.path))
+                                  }
+                                  disabled={isBusy}
+                                >
+                                  Unstage
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    performAction(requireApi().stageFile(selectedRepo.id, file.path))
+                                  }
+                                  disabled={isBusy}
+                                >
+                                  Stage
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p>No changed files.</p>
+                  )}
+                </section>
+
+                {selectedRepo.lastErrorTranscript && (
+                  <details className="card">
+                    <summary>Last Error Transcript</summary>
+                    <pre>
+                      {selectedRepo.lastErrorTranscript.command}
+                      {"\n\n"}
+                      {selectedRepo.lastErrorTranscript.stderr || "(no stderr)"}
+                      {"\n\n"}
+                      {selectedRepo.lastErrorTranscript.stdout || "(no stdout)"}
+                    </pre>
+                  </details>
+                )}
+              </>
             )}
           </section>
-        </aside>
-      </main>
+
+          <aside className="settings-panel">
+            <section className="card">
+              <h3>Discovery Settings</h3>
+              {settingsEditor && (
+                <form onSubmit={saveSettings} className="stack-form discovery-form">
+                  <label>
+                    Windows roots (one path per line)
+                    <textarea
+                      className="discovery-textarea"
+                      rows={3}
+                      spellCheck={false}
+                      value={settingsEditor.windowsRootsText}
+                      onChange={(event) =>
+                        setSettingsEditor((current) =>
+                          current ? { ...current, windowsRootsText: event.target.value } : current
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    WSL roots (`distro:/path`, one per line)
+                    <textarea
+                      className="discovery-textarea"
+                      rows={3}
+                      spellCheck={false}
+                      value={settingsEditor.wslRootsText}
+                      onChange={(event) =>
+                        setSettingsEditor((current) =>
+                          current ? { ...current, wslRootsText: event.target.value } : current
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Ignore patterns (one token per line)
+                    <textarea
+                      className="discovery-textarea"
+                      rows={3}
+                      spellCheck={false}
+                      value={settingsEditor.ignorePatternsText}
+                      onChange={(event) =>
+                        setSettingsEditor((current) =>
+                          current ? { ...current, ignorePatternsText: event.target.value } : current
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Ignored repos (`windows:C:\repo` or `wsl:distro:/path`, one per line)
+                    <textarea
+                      className="discovery-textarea"
+                      rows={3}
+                      spellCheck={false}
+                      value={settingsEditor.ignoredReposText}
+                      onChange={(event) =>
+                        setSettingsEditor((current) =>
+                          current ? { ...current, ignoredReposText: event.target.value } : current
+                        )
+                      }
+                    />
+                  </label>
+                  <button type="submit" disabled={isBusy}>
+                    Save Settings
+                  </button>
+                </form>
+              )}
+            </section>
+          </aside>
+        </main>
+      </div>
     </div>
   );
 }

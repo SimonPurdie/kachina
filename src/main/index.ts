@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu } from "electron";
 import { JsonStateStore } from "./storage";
 import { RepoService } from "./repo-service";
 import { registerIpcHandlers } from "./ipc";
@@ -14,6 +14,9 @@ async function createMainWindow(): Promise<void> {
     height: 900,
     minWidth: 1100,
     minHeight: 700,
+    frame: false,
+    titleBarStyle: "hidden",
+    autoHideMenuBar: true,
     backgroundColor: "#f7f4ec",
     webPreferences: {
       preload: preloadPath,
@@ -22,6 +25,19 @@ async function createMainWindow(): Promise<void> {
       sandbox: false
     }
   });
+
+  Menu.setApplicationMenu(null);
+  mainWindow.setMenuBarVisibility(false);
+
+  const emitWindowState = (): void => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    mainWindow.webContents.send("kachina:windowStateChanged", mainWindow.isMaximized());
+  };
+
+  mainWindow.on("maximize", emitWindowState);
+  mainWindow.on("unmaximize", emitWindowState);
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
@@ -35,6 +51,8 @@ async function createMainWindow(): Promise<void> {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  emitWindowState();
 }
 
 async function bootstrap(): Promise<void> {

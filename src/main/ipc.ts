@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
 import type { AddRepoInput, UpdateSettingsInput } from "../shared/types";
 import { RepoService } from "./repo-service";
 
@@ -38,4 +38,25 @@ export function registerIpcHandlers(service: RepoService): void {
   ipcMain.handle("kachina:cancelRepoOperation", async (_event, repoId: string) =>
     service.cancelRepoOperation(repoId)
   );
+  ipcMain.handle("kachina:windowMinimize", (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize();
+  });
+  ipcMain.handle("kachina:windowToggleMaximize", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return false;
+    }
+    if (win.isMaximized()) {
+      win.unmaximize();
+      return false;
+    }
+    win.maximize();
+    return true;
+  });
+  ipcMain.handle("kachina:windowClose", (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close();
+  });
+  ipcMain.handle("kachina:isWindowMaximized", (event) => {
+    return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false;
+  });
 }

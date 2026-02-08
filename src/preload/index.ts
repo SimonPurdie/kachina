@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { KachinaApi } from "../shared/types";
 
 const api: KachinaApi = {
@@ -19,7 +19,19 @@ const api: KachinaApi = {
   openInFileManager: (repoId) => ipcRenderer.invoke("kachina:openInFileManager", repoId),
   openInTerminal: (repoId) => ipcRenderer.invoke("kachina:openInTerminal", repoId),
   cancelRepoOperation: (repoId) =>
-    ipcRenderer.invoke("kachina:cancelRepoOperation", repoId)
+    ipcRenderer.invoke("kachina:cancelRepoOperation", repoId),
+  windowMinimize: () => ipcRenderer.invoke("kachina:windowMinimize"),
+  windowToggleMaximize: () => ipcRenderer.invoke("kachina:windowToggleMaximize"),
+  windowClose: () => ipcRenderer.invoke("kachina:windowClose"),
+  isWindowMaximized: () => ipcRenderer.invoke("kachina:isWindowMaximized"),
+  onWindowStateChanged: (listener) => {
+    const wrappedListener = (_event: IpcRendererEvent, isMaximized: boolean) =>
+      listener(isMaximized);
+    ipcRenderer.on("kachina:windowStateChanged", wrappedListener);
+    return () => {
+      ipcRenderer.removeListener("kachina:windowStateChanged", wrappedListener);
+    };
+  }
 };
 
 contextBridge.exposeInMainWorld("kachinaApi", api);
