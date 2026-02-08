@@ -1,42 +1,41 @@
 # Kachina
 
-Single-user desktop dashboard for monitoring and operating many Git repositories across Windows and WSL.
+Single-user desktop utility for tracking many Git repositories on Windows and WSL.
 
-## Stack
+## Overview
 
-- Electron (desktop shell + native process control)
-- TypeScript (main/preload/renderer)
-- React + Vite (renderer UI)
+- Electron + React + TypeScript desktop app.
+- Discovers repositories from configured Windows and WSL roots.
+- Persists catalog and settings in Electron user data (`kachina-state.json`).
+- Runs Git commands in each repo's native environment:
+  - Windows repo -> Windows `git`
+  - WSL repo -> `git` inside that WSL distro
 
-## What Is Implemented
+## Current Features
 
-- Persistent repository catalog (manual add/remove).
-- Discovery scan from configured Windows roots and WSL roots.
-- Native environment execution:
-  - Windows repos run with Windows `git`.
-  - WSL repos run inside chosen WSL distro with WSL `git`.
+- Repository list with filters (`Attention`, `Dirty`, `Ahead`, `All`).
 - Status summary per repo:
-  - dirty/staged/untracked/conflicts
-  - branch/detached
-  - upstream configured or not
-  - ahead/behind counts
-  - merge/rebase indicators (best-effort via git refs)
-- Queue-based serial execution for git operations.
-- Refresh all on demand, on startup, and on a background interval.
-- Actions:
-  - stage/unstage file
-  - commit (auto `git add -A` when no staged files but changes exist)
-  - push
-  - open in editor / file manager / terminal
-- Transcript capture for command failures (command, exit code, stdout/stderr, timing).
+  - branch / detached
+  - dirty, staged, untracked, conflicted counts
+  - upstream + ahead/behind
+  - merge/rebase indicators
+- Changed-files table with stage/unstage actions.
+- Commit action (auto `git add -A` when needed).
+- Sync action (`fetch --all --prune`, `pull --rebase`, `push --porcelain`).
+- Open in editor, file manager, and terminal.
+- Per-repo operation queue with in-progress/cancel UI.
+- Command transcripts captured for failed operations.
 
-## Configure Roots
+## Configuration
 
-In the right-side settings panel:
+In **Discovery Settings**:
 
-- `Windows roots`: one path per line.
-- `WSL roots`: one line per root in `distro:/path` format.
-- Click `Save Settings`, then `Scan Roots`.
+- `Windows roots`: one path per line
+- `WSL roots`: one `distro:/path` entry per line
+- `Ignore patterns`: substring tokens to skip while scanning
+- `Ignored repos`: normalized repo keys to exclude
+
+Use **Save Settings**, then **Scan Roots**.
 
 ## Development
 
@@ -52,7 +51,6 @@ npm run build
 npm run start
 ```
 
-## Notes
+## License
 
-- Commands are intentionally non-interactive (`GIT_TERMINAL_PROMPT=0`), so auth prompts fail fast and are shown via transcript.
-- State is stored in Electron user data as `kachina-state.json`.
+MIT. See `LICENSE`.
