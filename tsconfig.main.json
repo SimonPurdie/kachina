@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022"],
+    "types": ["node", "electron"],
+    "outDir": "dist-electron",
+    "rootDir": "src",
+    "sourceMap": true
+  },
+  "include": ["src/main", "src/preload", "src/shared"]
+}
