@@ -12,13 +12,15 @@ interface SettingsEditor {
   windowsRootsText: string;
   wslRootsText: string;
   ignorePatternsText: string;
+  ignoredReposText: string;
 }
 
 function toSettingsEditor(snapshot: DashboardSnapshot): SettingsEditor {
   return {
     windowsRootsText: snapshot.settings.windowsRoots.join("\n"),
     wslRootsText: snapshot.settings.wslRoots.map((item) => `${item.distro}:${item.path}`).join("\n"),
-    ignorePatternsText: snapshot.settings.ignorePatterns.join("\n")
+    ignorePatternsText: snapshot.settings.ignorePatterns.join("\n"),
+    ignoredReposText: snapshot.settings.ignoredRepos.join("\n")
   };
 }
 
@@ -171,6 +173,10 @@ export function App(): JSX.Element {
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
+    const ignoredRepos = settingsEditor.ignoredReposText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
     const wslRoots = settingsEditor.wslRootsText
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -193,9 +199,11 @@ export function App(): JSX.Element {
       const next = await requireApi().updateSettings({
         windowsRoots,
         wslRoots,
-        ignorePatterns
+        ignorePatterns,
+        ignoredRepos
       });
       setSnapshot(next);
+      setSettingsEditor(toSettingsEditor(next));
       setMessage("Settings updated.");
     } catch (error) {
       setMessage(`Settings update failed: ${(error as Error).message}`);
@@ -333,7 +341,8 @@ export function App(): JSX.Element {
                       try {
                         const next = await requireApi().removeRepo(selectedRepo.id);
                         setSnapshot(next);
-                        setMessage("Repository removed.");
+                        setSettingsEditor(toSettingsEditor(next));
+                        setMessage("Repository removed and added to ignored repos.");
                       } catch (error) {
                         setMessage((error as Error).message);
                       } finally {
@@ -400,6 +409,7 @@ export function App(): JSX.Element {
                   <h3>Actions</h3>
                   <textarea
                     rows={3}
+                    spellCheck={false}
                     value={commitMessage}
                     onChange={(event) => setCommitMessage(event.target.value)}
                     placeholder="Commit message"
@@ -489,6 +499,7 @@ export function App(): JSX.Element {
                   <textarea
                     className="discovery-textarea"
                     rows={3}
+                    spellCheck={false}
                     value={settingsEditor.windowsRootsText}
                     onChange={(event) =>
                       setSettingsEditor((current) =>
@@ -502,6 +513,7 @@ export function App(): JSX.Element {
                   <textarea
                     className="discovery-textarea"
                     rows={3}
+                    spellCheck={false}
                     value={settingsEditor.wslRootsText}
                     onChange={(event) =>
                       setSettingsEditor((current) =>
@@ -515,10 +527,25 @@ export function App(): JSX.Element {
                   <textarea
                     className="discovery-textarea"
                     rows={3}
+                    spellCheck={false}
                     value={settingsEditor.ignorePatternsText}
                     onChange={(event) =>
                       setSettingsEditor((current) =>
                         current ? { ...current, ignorePatternsText: event.target.value } : current
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Ignored repos (`windows:C:\repo` or `wsl:distro:/path`, one per line)
+                  <textarea
+                    className="discovery-textarea"
+                    rows={3}
+                    spellCheck={false}
+                    value={settingsEditor.ignoredReposText}
+                    onChange={(event) =>
+                      setSettingsEditor((current) =>
+                        current ? { ...current, ignoredReposText: event.target.value } : current
                       )
                     }
                   />

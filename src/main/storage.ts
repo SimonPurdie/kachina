@@ -11,6 +11,7 @@ export const defaultSettings: DashboardSettings = {
   windowsRoots: [],
   wslRoots: [],
   ignorePatterns: ["node_modules", "dist", "build", ".venv", ".idea"],
+  ignoredRepos: [],
   editorCommandWindows: "code <path>",
   editorCommandWsl: "code <path>",
   refreshIntervalSeconds: 180,
@@ -30,7 +31,8 @@ export class JsonStateStore {
           ...parsed.settings,
           windowsRoots: parsed.settings?.windowsRoots ?? [],
           wslRoots: parsed.settings?.wslRoots ?? [],
-          ignorePatterns: parsed.settings?.ignorePatterns ?? defaultSettings.ignorePatterns
+          ignorePatterns: parsed.settings?.ignorePatterns ?? defaultSettings.ignorePatterns,
+          ignoredRepos: parsed.settings?.ignoredRepos ?? defaultSettings.ignoredRepos
         },
         repos: Array.isArray(parsed.repos) ? parsed.repos : []
       };

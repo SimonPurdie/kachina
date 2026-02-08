@@ -21,6 +21,7 @@ export interface DashboardSettings {
   windowsRoots: string[];
   wslRoots: WslScanRoot[];
   ignorePatterns: string[];
+  ignoredRepos: string[];
   editorCommandWindows: string;
   editorCommandWsl: string;
   refreshIntervalSeconds: number;
@@ -117,6 +118,7 @@ export interface UpdateSettingsInput {
   windowsRoots?: string[];
   wslRoots?: WslScanRoot[];
   ignorePatterns?: string[];
+  ignoredRepos?: string[];
   editorCommandWindows?: string;
   editorCommandWsl?: string;
   refreshIntervalSeconds?: number;

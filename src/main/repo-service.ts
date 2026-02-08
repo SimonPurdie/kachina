@@ -210,6 +210,9 @@ export class RepoService {
       ...defaultSettings,
       ...this.state.settings
     };
+    this.state.settings.ignoredRepos = this.normalizeIgnoredRepos(
+      this.state.settings.ignoredRepos ?? []
+    );
     for (const repo of this.state.repos) {
       repo.activeOperation = null;
       repo.transcripts = Array.isArray(repo.transcripts) ? repo.transcripts : [];
@@ -217,6 +220,7 @@ export class RepoService {
       repo.lastError = repo.lastError ?? null;
       repo.lastErrorTranscript = repo.lastErrorTranscript ?? null;
     }
+    this.pruneIgnoredRepos();
   }
 
   dispose(): void {
@@ -274,19 +278,32 @@ export class RepoService {
   }
 
   async removeRepo(repoId: string): Promise<DashboardSnapshot> {
+    const repo = this.getRepo(repoId);
+    const repoKey = normalizePathKey(repo.path, repo.environment);
+    this.state.settings.ignoredRepos = this.normalizeIgnoredRepos([
+      ...this.state.settings.ignoredRepos,
+      repoKey
+    ]);
+    this.queue.cancelRepo(repoId);
     this.state.repos = this.state.repos.filter((repo) => repo.id !== repoId);
     await this.persist();
     return this.getSnapshot();
   }
 
   async updateSettings(input: UpdateSettingsInput): Promise<DashboardSnapshot> {
+    const ignoredRepos =
+      input.ignoredRepos !== undefined
+        ? this.normalizeIgnoredRepos(input.ignoredRepos)
+        : this.state.settings.ignoredRepos;
     this.state.settings = {
       ...this.state.settings,
       ...input,
       windowsRoots: input.windowsRoots ?? this.state.settings.windowsRoots,
       wslRoots: input.wslRoots ?? this.state.settings.wslRoots,
-      ignorePatterns: input.ignorePatterns ?? this.state.settings.ignorePatterns
+      ignorePatterns: input.ignorePatterns ?? this.state.settings.ignorePatterns,
+      ignoredRepos
     };
+    this.pruneIgnoredRepos();
     await this.persist();
     this.startAutoRefresh();
     return this.getSnapshot();
@@ -321,6 +338,9 @@ export class RepoService {
     }
 
     for (const item of discovered) {
+      if (this.isIgnoredRepo(item.path, item.environment)) {
+        continue;
+      }
       this.registerRepo({
         displayName: ensureName(item.path),
         path: item.path,
@@ -921,6 +941,30 @@ exit 127
     return true;
   }
 
+  private pruneIgnoredRepos(): boolean {
+    const keptRepos: RepoRecord[] = [];
+    const removedRepoIds: string[] = [];
+
+    for (const repo of this.state.repos) {
+      if (this.isIgnoredRepo(repo.path, repo.environment)) {
+        removedRepoIds.push(repo.id);
+        continue;
+      }
+      keptRepos.push(repo);
+    }
+
+    if (removedRepoIds.length === 0) {
+      return false;
+    }
+
+    for (const repoId of removedRepoIds) {
+      this.queue.cancelRepo(repoId);
+    }
+
+    this.state.repos = keptRepos;
+    return true;
+  }
+
   private async repoPathExists(
     environment: RepoEnvironment,
     repoPath: string
@@ -955,6 +999,56 @@ exit 127
     } catch {
       return null;
     }
+  }
+
+  private normalizeIgnoredRepo(raw: string): string | null {
+    const value = raw.trim();
+    if (!value) {
+      return null;
+    }
+
+    if (value.startsWith("windows:")) {
+      const repoPath = value.slice("windows:".length).trim();
+      if (!repoPath) {
+        return null;
+      }
+      return normalizePathKey(repoPath, { kind: "windows" });
+    }
+
+    if (!value.startsWith("wsl:")) {
+      return null;
+    }
+
+    const parts = value.split(":");
+    if (parts.length < 3) {
+      return null;
+    }
+    const distro = parts[1]?.trim();
+    const repoPath = parts.slice(2).join(":").trim();
+    if (!distro || !repoPath) {
+      return null;
+    }
+
+    return normalizePathKey(repoPath, { kind: "wsl", distro });
+  }
+
+  private normalizeIgnoredRepos(values: string[]): string[] {
+    const normalized: string[] = [];
+    const seen = new Set<string>();
+    for (const value of values) {
+      const item = this.normalizeIgnoredRepo(value);
+      if (!item || seen.has(item)) {
+        continue;
+      }
+      seen.add(item);
+      normalized.push(item);
+    }
+    return normalized;
+  }
+
+  private isIgnoredRepo(repoPath: string, environment: RepoEnvironment): boolean {
+    const key = normalizePathKey(repoPath, environment);
+    return this.state.settings.ignoredRepos.includes(key);
   }
 
   private shouldIgnore(targetPath: string): boolean {
