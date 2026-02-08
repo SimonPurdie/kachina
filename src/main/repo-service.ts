@@ -213,7 +213,7 @@ export class RepoService {
     for (const repo of this.state.repos) {
       repo.activeOperation = null;
       repo.transcripts = Array.isArray(repo.transcripts) ? repo.transcripts : [];
-      repo.tags = Array.isArray(repo.tags) ? repo.tags : [];
+      delete (repo as RepoRecord & { tags?: unknown }).tags;
       repo.lastError = repo.lastError ?? null;
       repo.lastErrorTranscript = repo.lastErrorTranscript ?? null;
     }
@@ -267,8 +267,7 @@ export class RepoService {
     this.registerRepo({
       displayName: input.displayName || ensureName(candidate.path),
       path: candidate.path,
-      environment: candidate.environment,
-      tags: input.tags ?? []
+      environment: candidate.environment
     });
     await this.persist();
     return this.getSnapshot();
@@ -276,14 +275,6 @@ export class RepoService {
 
   async removeRepo(repoId: string): Promise<DashboardSnapshot> {
     this.state.repos = this.state.repos.filter((repo) => repo.id !== repoId);
-    await this.persist();
-    return this.getSnapshot();
-  }
-
-  async setTags(repoId: string, tags: string[]): Promise<DashboardSnapshot> {
-    const repo = this.getRepo(repoId);
-    repo.tags = [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))];
-    repo.updatedAt = nowIso();
     await this.persist();
     return this.getSnapshot();
   }
@@ -302,6 +293,8 @@ export class RepoService {
   }
 
   async scanConfiguredRoots(): Promise<DashboardSnapshot> {
+    await this.pruneMissingRepos();
+
     const discovered: Array<{
       path: string;
       environment: RepoEnvironment;
@@ -331,8 +324,7 @@ export class RepoService {
       this.registerRepo({
         displayName: ensureName(item.path),
         path: item.path,
-        environment: item.environment,
-        tags: []
+        environment: item.environment
       });
     }
 
@@ -580,6 +572,10 @@ exit 127
   }
 
   private async refreshAllInternal(): Promise<void> {
+    if (await this.pruneMissingRepos()) {
+      await this.persist();
+    }
+
     for (const repo of this.state.repos) {
       try {
         await this.queue.enqueue(
@@ -702,8 +698,10 @@ exit 127
       );
       this.pushTranscript(repo, statusTranscript);
       const parsed = parseStatusOutput(statusTranscript.stdout);
-      const mergeInProgress = await this.refExists(repo, "MERGE_HEAD", signal);
-      const rebaseInProgress = await this.refExists(repo, "REBASE_HEAD", signal);
+      const mergeInProgress = await this.gitPathExists(repo, "MERGE_HEAD", "any", signal);
+      const rebaseInProgress =
+        (await this.gitPathExists(repo, "rebase-merge", "dir", signal)) ||
+        (await this.gitPathExists(repo, "rebase-apply", "dir", signal));
 
       repo.status = {
         ...parsed,
@@ -755,16 +753,48 @@ exit 127
     }
   }
 
-  private async refExists(
+  private async gitPathExists(
     repo: RepoRecord,
-    refName: string,
+    gitPathName: string,
+    pathType: "any" | "dir",
     signal: AbortSignal
   ): Promise<boolean> {
     try {
-      await runGitCommand(repo.environment, repo.path, ["rev-parse", "-q", "--verify", refName], {
-        signal,
-        timeoutMs: 10_000
-      });
+      const transcript = await runGitCommand(
+        repo.environment,
+        repo.path,
+        ["rev-parse", "--git-path", gitPathName],
+        {
+          signal,
+          timeoutMs: 10_000
+        }
+      );
+      const resolvedPath = transcript.stdout.trim();
+      if (!resolvedPath) {
+        return false;
+      }
+
+      if (repo.environment.kind === "windows") {
+        const absolutePath = path.isAbsolute(resolvedPath)
+          ? resolvedPath
+          : path.join(repo.path, resolvedPath);
+        try {
+          const stats = await fs.stat(absolutePath);
+          return pathType === "dir" ? stats.isDirectory() : true;
+        } catch {
+          return false;
+        }
+      }
+
+      const testFlag = pathType === "dir" ? "-d" : "-e";
+      await runWslScript(
+        repo.environment.distro,
+        `cd ${shellEscape(repo.path)} && [ ${testFlag} ${shellEscape(resolvedPath)} ]`,
+        {
+          signal,
+          timeoutMs: 10_000
+        }
+      );
       return true;
     } catch {
       return false;
@@ -783,7 +813,6 @@ exit 127
     displayName: string;
     path: string;
     environment: RepoEnvironment;
-    tags: string[];
   }): RepoRecord {
     const key = normalizePathKey(input.path, input.environment);
     const existing = this.state.repos.find(
@@ -799,7 +828,6 @@ exit 127
       displayName: input.displayName,
       path: input.path,
       environment: input.environment,
-      tags: [...new Set(input.tags.map((tag) => tag.trim()).filter(Boolean))],
       createdAt: now,
       updatedAt: now,
       status: null,
@@ -826,6 +854,66 @@ exit 127
     await runGitCommand(environment, repoPath, ["rev-parse", "--is-inside-work-tree"], {
       timeoutMs: 20_000
     });
+  }
+
+  private async pruneMissingRepos(): Promise<boolean> {
+    const existingRepos: RepoRecord[] = [];
+    const removedRepoIds: string[] = [];
+
+    for (const repo of this.state.repos) {
+      const exists = await this.repoPathExists(repo.environment, repo.path);
+      if (exists === false) {
+        removedRepoIds.push(repo.id);
+        continue;
+      }
+      existingRepos.push(repo);
+    }
+
+    if (removedRepoIds.length === 0) {
+      return false;
+    }
+
+    for (const repoId of removedRepoIds) {
+      this.queue.cancelRepo(repoId);
+    }
+    this.state.repos = existingRepos;
+    return true;
+  }
+
+  private async repoPathExists(
+    environment: RepoEnvironment,
+    repoPath: string
+  ): Promise<boolean | null> {
+    if (environment.kind === "windows") {
+      try {
+        await fs.access(repoPath);
+        return true;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ENOENT" || code === "ENOTDIR") {
+          return false;
+        }
+        return null;
+      }
+    }
+
+    try {
+      const transcript = await runWslScript(
+        environment.distro,
+        `[ -d ${shellEscape(repoPath)} ] && printf '1' || printf '0'`,
+        { timeoutMs: 10_000 }
+      );
+      const marker = transcript.stdout.trim();
+      if (marker === "1") {
+        return true;
+      }
+      if (marker === "0") {
+        return false;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   private shouldIgnore(targetPath: string): boolean {

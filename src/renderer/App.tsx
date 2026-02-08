@@ -14,7 +14,6 @@ interface ManualRepoForm {
   path: string;
   environment: "windows" | "wsl";
   distro: string;
-  tags: string;
 }
 
 interface SettingsEditor {
@@ -31,8 +30,7 @@ const emptyManualForm: ManualRepoForm = {
   displayName: "",
   path: "",
   environment: "windows",
-  distro: "",
-  tags: ""
+  distro: ""
 };
 
 function toSettingsEditor(snapshot: DashboardSnapshot): SettingsEditor {
@@ -72,7 +70,6 @@ export function App(): JSX.Element {
   const [manualForm, setManualForm] = useState<ManualRepoForm>(emptyManualForm);
   const [settingsEditor, setSettingsEditor] = useState<SettingsEditor | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
-  const [tagDraft, setTagDraft] = useState("");
 
   const selectedRepo = useMemo(
     () => snapshot?.repos.find((repo) => repo.id === selectedRepoId) ?? null,
@@ -113,16 +110,9 @@ export function App(): JSX.Element {
     if (!selectedRepoId || !snapshot.repos.some((repo) => repo.id === selectedRepoId)) {
       const next = snapshot.repos[0];
       setSelectedRepoId(next ? next.id : null);
-      setTagDraft(next?.tags.join(", ") ?? "");
       return;
     }
   }, [snapshot, selectedRepoId]);
-
-  useEffect(() => {
-    if (selectedRepo) {
-      setTagDraft(selectedRepo.tags.join(", "));
-    }
-  }, [selectedRepo?.id]);
 
   async function loadSnapshot(): Promise<void> {
     setIsBusy(true);
@@ -205,11 +195,7 @@ export function App(): JSX.Element {
       environment:
         form.environment === "windows"
           ? { kind: "windows" }
-          : { kind: "wsl", distro: form.distro },
-      tags: form.tags
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean)
+          : { kind: "wsl", distro: form.distro }
     };
 
     setIsBusy(true);
@@ -270,28 +256,6 @@ export function App(): JSX.Element {
       setMessage("Settings updated.");
     } catch (error) {
       setMessage(`Settings update failed: ${(error as Error).message}`);
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function saveTags(): Promise<void> {
-    if (!selectedRepo) {
-      return;
-    }
-    setIsBusy(true);
-    try {
-      const next = await requireApi().setTags(
-        selectedRepo.id,
-        tagDraft
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean)
-      );
-      setSnapshot(next);
-      setMessage("Tags updated.");
-    } catch (error) {
-      setMessage(`Tag update failed: ${(error as Error).message}`);
     } finally {
       setIsBusy(false);
     }
@@ -473,20 +437,6 @@ export function App(): JSX.Element {
                 </section>
 
                 <section className="card">
-                  <h3>Tags</h3>
-                  <div className="inline-form">
-                    <input
-                      value={tagDraft}
-                      onChange={(event) => setTagDraft(event.target.value)}
-                      placeholder="Work, Personal, Archived"
-                    />
-                    <button onClick={saveTags} disabled={isBusy}>
-                      Save
-                    </button>
-                  </div>
-                </section>
-
-                <section className="card">
                   <h3>Commit & Push</h3>
                   <textarea
                     rows={3}
@@ -615,13 +565,6 @@ export function App(): JSX.Element {
                   disabled={manualForm.environment !== "wsl"}
                 />
               </div>
-              <input
-                value={manualForm.tags}
-                onChange={(event) =>
-                  setManualForm((current) => ({ ...current, tags: event.target.value }))
-                }
-                placeholder="Tags (comma-separated)"
-              />
               <button type="submit" disabled={isBusy}>
                 Add
               </button>

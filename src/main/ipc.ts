@@ -12,9 +12,6 @@ export function registerIpcHandlers(service: RepoService): void {
   ipcMain.handle("kachina:removeRepo", async (_event, repoId: string) =>
     service.removeRepo(repoId)
   );
-  ipcMain.handle("kachina:setTags", async (_event, repoId: string, tags: string[]) =>
-    service.setTags(repoId, tags)
-  );
   ipcMain.handle("kachina:updateSettings", async (_event, input: UpdateSettingsInput) =>
     service.updateSettings(input)
   );

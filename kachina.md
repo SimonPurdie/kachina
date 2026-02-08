@@ -73,7 +73,6 @@ For each repository, show:
 ## Primary User Flows
 - Main list view:
   - filter/sort (e.g. dirty first, ahead/behind first)
-  - group/tag repositories (Work / Personal / Archived, etc.)
 - Repo detail view:
   - list of changed files and basic change indicators
   - stage/unstage controls (MVP level)

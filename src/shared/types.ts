@@ -79,7 +79,6 @@ export interface RepoRecord {
   displayName: string;
   path: string;
   environment: RepoEnvironment;
-  tags: string[];
   createdAt: string;
   updatedAt: string;
   status: RepoStatusSummary | null;
@@ -99,7 +98,6 @@ export interface AddRepoInput {
   displayName?: string;
   path: string;
   environment: RepoEnvironment;
-  tags?: string[];
 }
 
 export interface RepoActionResult {
@@ -131,7 +129,6 @@ export interface KachinaApi {
   scanConfiguredRoots: () => Promise<DashboardSnapshot>;
   addRepo: (input: AddRepoInput) => Promise<DashboardSnapshot>;
   removeRepo: (repoId: string) => Promise<DashboardSnapshot>;
-  setTags: (repoId: string, tags: string[]) => Promise<DashboardSnapshot>;
   updateSettings: (input: UpdateSettingsInput) => Promise<DashboardSnapshot>;
   stageFile: (repoId: string, filePath: string) => Promise<RepoActionResult>;
   unstageFile: (repoId: string, filePath: string) => Promise<RepoActionResult>;

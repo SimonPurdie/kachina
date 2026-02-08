@@ -7,7 +7,6 @@ const api: KachinaApi = {
   scanConfiguredRoots: () => ipcRenderer.invoke("kachina:scanConfiguredRoots"),
   addRepo: (input) => ipcRenderer.invoke("kachina:addRepo", input),
   removeRepo: (repoId) => ipcRenderer.invoke("kachina:removeRepo", repoId),
-  setTags: (repoId, tags) => ipcRenderer.invoke("kachina:setTags", repoId, tags),
   updateSettings: (input) => ipcRenderer.invoke("kachina:updateSettings", input),
   stageFile: (repoId, filePath) =>
     ipcRenderer.invoke("kachina:stageFile", repoId, filePath),
