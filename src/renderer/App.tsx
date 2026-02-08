@@ -50,7 +50,7 @@ export function App(): JSX.Element {
   const [settingsEditor, setSettingsEditor] = useState<SettingsEditor | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
-  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(true);
+  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [isSettingsPanelAnimating, setIsSettingsPanelAnimating] = useState(false);
 
   const selectedRepo = useMemo(

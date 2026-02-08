@@ -1225,23 +1225,33 @@ exit 127
   }
 
   private async openWindowsTerminal(targetDirectory: string): Promise<void> {
-    const escapedTarget = targetDirectory.replaceAll('"', '\\"');
     const wtExecutable = await this.findWindowsTerminalExecutable();
-
+    const escapedTarget = targetDirectory.replaceAll("'", "''");
     const attempts = [
       wtExecutable
-        ? `start "" "${wtExecutable.replaceAll('"', '\\"')}" -d "${escapedTarget}"`
+        ? `Start-Process -FilePath '${wtExecutable.replaceAll("'", "''")}' -ArgumentList @('-d','${escapedTarget}')`
         : null,
-      `start "" wt -d "${escapedTarget}"`,
-      `start "" wt.exe -d "${escapedTarget}"`
+      `Start-Process -FilePath 'wt.exe' -ArgumentList @('-d','${escapedTarget}')`,
+      `Start-Process -FilePath 'wt' -ArgumentList @('-d','${escapedTarget}')`
     ].filter((item): item is string => Boolean(item));
 
     let lastError: unknown = null;
     for (const command of attempts) {
       try {
-        await runCommand("cmd.exe", ["/d", "/s", "/c", command], {
+        await runCommand(
+          "powershell.exe",
+          [
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            `$ErrorActionPreference='Stop'; ${command}`
+          ],
+          {
           timeoutMs: 15_000
-        });
+          }
+        );
         return;
       } catch (error) {
         lastError = error;
