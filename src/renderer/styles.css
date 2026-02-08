@@ -19,6 +19,7 @@
   --line-strong: rgba(98, 48, 29, 0.75);
   --panel-shadow: 6px 6px 0 rgba(98, 48, 29, 0.28);
   --panel-inset: inset 0 1px 0 rgba(255, 245, 213, 0.75);
+  --halftone-corner: url("./assets/halftone-corner.svg");
 }
 
 *,
@@ -257,14 +258,34 @@ h3 {
   position: absolute;
   right: -36px;
   bottom: -42px;
-  width: 180px;
-  height: 160px;
-  background:
-    radial-gradient(circle, rgba(98, 48, 29, 0.24) 20%, transparent 22%) 0 0 / 10px 10px;
-  transform: rotate(-17deg);
-  opacity: 0.4;
+  width: 196px;
+  height: 196px;
+  background-image: var(--halftone-corner);
+  background-size: contain;
+  background-repeat: no-repeat;
+  transform: rotate(-18deg);
+  opacity: 0.24;
   pointer-events: none;
-  mask-image: radial-gradient(circle at 20% 20%, black 25%, transparent 72%);
+  mix-blend-mode: multiply;
+  mask-image: radial-gradient(circle at 12% 12%, black 28%, transparent 78%);
+}
+
+.detail-panel::after {
+  transform: rotate(-24deg) scale(1.06);
+}
+
+.settings-panel::after {
+  transform: rotate(-12deg) scale(0.95);
+}
+
+.card::after {
+  width: 150px;
+  height: 150px;
+  right: -30px;
+  bottom: -35px;
+  transform: rotate(-20deg);
+  opacity: 0.19;
+  mask-image: radial-gradient(circle at 16% 16%, black 24%, transparent 74%);
 }
 
 .repo-panel,
@@ -283,6 +304,10 @@ h3 {
   flex: 1 1 auto;
   flex-direction: column;
   margin-bottom: 0;
+}
+
+.settings-panel .card::after {
+  display: none;
 }
 
 .detail-panel {
