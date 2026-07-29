@@ -3,7 +3,6 @@ import * as path from "node:path";
 import { spawn } from "node:child_process";
 import type { Dirent } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { shell } from "electron";
 import {
   CommandFailedError,
   runCommand,
@@ -18,6 +17,7 @@ import {
   JsonStateStore,
   type PersistedState
 } from "./storage";
+import type { DesktopLauncher } from "./desktop-launcher";
 import type {
   AddRepoInput,
   CommandTranscript,
@@ -185,7 +185,10 @@ export class RepoService {
   private autoRefreshTimer: NodeJS.Timeout | null = null;
   private refreshPromise: Promise<void> | null = null;
 
-  constructor(private readonly store: JsonStateStore) {
+  constructor(
+    private readonly store: JsonStateStore,
+    private readonly desktopLauncher: DesktopLauncher
+  ) {
     this.queue = new OperationQueue({
       onStart: (repoId, operation) => {
         const repo = this.state.repos.find((item) => item.id === repoId);
@@ -500,7 +503,7 @@ export class RepoService {
               await this.launchDetached("code", ["--folder-uri", folderUri]);
             } catch {
               const vscodeUri = `vscode://file${pathToFileURL(repo.path).pathname}`;
-              await shell.openExternal(vscodeUri);
+              await this.desktopLauncher.openExternal(vscodeUri);
             }
           }
         } else {
@@ -587,7 +590,7 @@ exit 127
         repo.environment.kind === "windows"
           ? repo.path
           : this.wslPathToUnc(repo.environment.distro, repo.path);
-      const openError = await shell.openPath(target);
+      const openError = await this.desktopLauncher.openPath(target);
       if (openError) {
         await this.launchDetached("explorer.exe", [target]);
       }

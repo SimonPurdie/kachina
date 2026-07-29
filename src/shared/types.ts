@@ -114,8 +114,6 @@ export interface RepoStatusResult {
   transcript?: CommandTranscript;
 }
 
-export type WindowStateListener = (isMaximized: boolean) => void;
-
 export interface UpdateSettingsInput {
   windowsRoots?: string[];
   wslRoots?: WslScanRoot[];
@@ -143,6 +141,11 @@ export interface KachinaApi {
   openInFileManager: (repoId: string) => Promise<RepoActionResult>;
   openInTerminal: (repoId: string) => Promise<RepoActionResult>;
   cancelRepoOperation: (repoId: string) => Promise<DashboardSnapshot>;
+}
+
+export type WindowStateListener = (isMaximized: boolean) => void;
+
+export interface KachinaWindowApi {
   windowMinimize: () => Promise<void>;
   windowToggleMaximize: () => Promise<boolean>;
   windowClose: () => Promise<void>;

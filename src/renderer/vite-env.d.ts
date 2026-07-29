@@ -1,10 +1,11 @@
 /// <reference types="vite/client" />
 
-import type { KachinaApi } from "../shared/types";
+import type { KachinaApi, KachinaWindowApi } from "../shared/types";
 
 declare global {
   interface Window {
-    kachinaApi: KachinaApi;
+    kachinaApi?: KachinaApi;
+    kachinaWindowApi?: KachinaWindowApi;
   }
 }
 

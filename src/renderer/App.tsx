@@ -1,11 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type {
   DashboardSnapshot,
-  KachinaApi,
   RepoActionResult,
   RepoRecord
 } from "../shared/types";
 import twirlyIcon from "./assets/kachina-twirly-icon.svg";
+import { getKachinaApi } from "./browser-api";
 
 type RepoFilter = "all" | "attention" | "dirty" | "ahead";
 
@@ -30,15 +30,6 @@ function formatEnv(repo: RepoRecord): string {
     return "Windows";
   }
   return `WSL:${repo.environment.distro}`;
-}
-
-function requireApi(): KachinaApi {
-  if (!window.kachinaApi) {
-    throw new Error(
-      "Electron preload API unavailable. Restart `npm run dev` after a successful main-process compile."
-    );
-  }
-  return window.kachinaApi;
 }
 
 export function App(): JSX.Element {
@@ -88,13 +79,20 @@ export function App(): JSX.Element {
   const primaryActionDisabled = isBusy || (!hasChangedFiles && !needsSync);
   const statusMessage = message || "Let's go, Twirly!";
   const isPlaceholderMessage = !message;
+  const isElectronHost = Boolean(window.kachinaWindowApi);
 
   useEffect(() => {
     let isMounted = true;
-    const api = requireApi();
+    const windowApi = window.kachinaWindowApi;
 
     void loadSnapshot();
-    void api
+    if (!windowApi) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    void windowApi
       .isWindowMaximized()
       .then((next) => {
         if (isMounted) {
@@ -107,7 +105,7 @@ export function App(): JSX.Element {
         }
       });
 
-    const dispose = api.onWindowStateChanged((next) => {
+    const dispose = windowApi.onWindowStateChanged((next) => {
       setIsWindowMaximized(next);
     });
 
@@ -146,7 +144,7 @@ export function App(): JSX.Element {
   async function loadSnapshot(): Promise<void> {
     setIsBusy(true);
     try {
-      const next = await requireApi().getSnapshot();
+      const next = await getKachinaApi().getSnapshot();
       setSnapshot(next);
       setSettingsEditor(toSettingsEditor(next));
       setMessage("");
@@ -160,7 +158,7 @@ export function App(): JSX.Element {
   async function refreshAll(): Promise<void> {
     setIsBusy(true);
     try {
-      const next = await requireApi().refreshAll();
+      const next = await getKachinaApi().refreshAll();
       setSnapshot(next);
       setMessage("Refreshed all repositories.");
     } catch (error) {
@@ -173,7 +171,7 @@ export function App(): JSX.Element {
   async function scanConfiguredRoots(): Promise<void> {
     setIsBusy(true);
     try {
-      const next = await requireApi().scanConfiguredRoots();
+      const next = await getKachinaApi().scanConfiguredRoots();
       setSnapshot(next);
       setMessage("Scan complete.");
     } catch (error) {
@@ -238,7 +236,7 @@ export function App(): JSX.Element {
 
     setIsBusy(true);
     try {
-      const next = await requireApi().updateSettings({
+      const next = await getKachinaApi().updateSettings({
         windowsRoots,
         wslRoots,
         ignorePatterns,
@@ -260,26 +258,29 @@ export function App(): JSX.Element {
     }
 
     if (selectedRepo.status.changedFiles.length > 0) {
-      await performAction(requireApi().commitRepo(selectedRepo.id, commitMessage));
+      await performAction(getKachinaApi().commitRepo(selectedRepo.id, commitMessage));
       return;
     }
 
     if (selectedRepo.status.ahead > 0 || selectedRepo.status.behind > 0) {
-      await performAction(requireApi().syncRepo(selectedRepo.id));
+      await performAction(getKachinaApi().syncRepo(selectedRepo.id));
     }
   }
 
   async function handleWindowMinimize(): Promise<void> {
-    await requireApi().windowMinimize();
+    await window.kachinaWindowApi?.windowMinimize();
   }
 
   async function handleWindowToggleMaximize(): Promise<void> {
-    const next = await requireApi().windowToggleMaximize();
+    const next = await window.kachinaWindowApi?.windowToggleMaximize();
+    if (next === undefined) {
+      return;
+    }
     setIsWindowMaximized(next);
   }
 
   async function handleWindowClose(): Promise<void> {
-    await requireApi().windowClose();
+    await window.kachinaWindowApi?.windowClose();
   }
 
   function handleSettingsToggle(): void {
@@ -289,40 +290,46 @@ export function App(): JSX.Element {
 
   return (
     <div className="app-shell">
-      <header className="window-titlebar">
-        <div className="window-titlebar-brand">
-          <img src={twirlyIcon} alt="" aria-hidden="true" className="window-titlebar-icon" />
-          <div className="window-titlebar-copy">
-            <strong>Kachina</strong>
+      {isElectronHost && (
+        <header className="window-titlebar">
+          <div className="window-titlebar-brand">
+            <img src={twirlyIcon} alt="" aria-hidden="true" className="window-titlebar-icon" />
+            <div className="window-titlebar-copy">
+              <strong>Kachina</strong>
+            </div>
           </div>
-        </div>
-        <div className="window-titlebar-controls">
-          <button
-            type="button"
-            className="window-control"
-            aria-label="Minimize window"
-            onClick={() => void handleWindowMinimize()}
-          >
-            <span className="window-control-icon minimize" />
-          </button>
-          <button
-            type="button"
-            className="window-control"
-            aria-label={isWindowMaximized ? "Restore window" : "Maximize window"}
-            onClick={() => void handleWindowToggleMaximize()}
-          >
-            <span className={`window-control-icon ${isWindowMaximized ? "restore" : "maximize"}`} />
-          </button>
-          <button
-            type="button"
-            className="window-control close"
-            aria-label="Close window"
-            onClick={() => void handleWindowClose()}
-          >
-            <span className="window-control-icon close" />
-          </button>
-        </div>
-      </header>
+          <div className="window-titlebar-controls">
+            <button
+              type="button"
+              className="window-control"
+              aria-label="Minimize window"
+              onClick={() => void handleWindowMinimize()}
+            >
+              <span className="window-control-icon minimize" />
+            </button>
+            <button
+              type="button"
+              className="window-control"
+              aria-label={isWindowMaximized ? "Restore window" : "Maximize window"}
+              onClick={() => void handleWindowToggleMaximize()}
+            >
+              <span
+                className={`window-control-icon ${
+                  isWindowMaximized ? "restore" : "maximize"
+                }`}
+              />
+            </button>
+            <button
+              type="button"
+              className="window-control close"
+              aria-label="Close window"
+              onClick={() => void handleWindowClose()}
+            >
+              <span className="window-control-icon close" />
+            </button>
+          </div>
+        </header>
+      )}
 
       <div className="app-content">
         <header className="topbar">
@@ -441,15 +448,25 @@ export function App(): JSX.Element {
                     <p className="repo-path">{selectedRepo.path}</p>
                   </div>
                   <div className="detail-actions">
-                    <button onClick={() => performAction(requireApi().openInEditor(selectedRepo.id))}>
+                    <button
+                      onClick={() =>
+                        performAction(getKachinaApi().openInEditor(selectedRepo.id))
+                      }
+                    >
                       Open Editor
                     </button>
                     <button
-                      onClick={() => performAction(requireApi().openInFileManager(selectedRepo.id))}
+                      onClick={() =>
+                        performAction(getKachinaApi().openInFileManager(selectedRepo.id))
+                      }
                     >
                       Open Folder
                     </button>
-                    <button onClick={() => performAction(requireApi().openInTerminal(selectedRepo.id))}>
+                    <button
+                      onClick={() =>
+                        performAction(getKachinaApi().openInTerminal(selectedRepo.id))
+                      }
+                    >
                       Open Shell
                     </button>
                     <button
@@ -457,7 +474,7 @@ export function App(): JSX.Element {
                       onClick={async () => {
                         setIsBusy(true);
                         try {
-                          const next = await requireApi().removeRepo(selectedRepo.id);
+                          const next = await getKachinaApi().removeRepo(selectedRepo.id);
                           setSnapshot(next);
                           setSettingsEditor(toSettingsEditor(next));
                           setMessage("Repository removed and added to ignored repos.");
@@ -482,7 +499,7 @@ export function App(): JSX.Element {
                     <button
                       className="danger"
                       onClick={async () => {
-                        const next = await requireApi().cancelRepoOperation(selectedRepo.id);
+                        const next = await getKachinaApi().cancelRepoOperation(selectedRepo.id);
                         setSnapshot(next);
                         setMessage("Cancel requested.");
                       }}
@@ -566,7 +583,9 @@ export function App(): JSX.Element {
                               {file.isStaged ? (
                                 <button
                                   onClick={() =>
-                                    performAction(requireApi().unstageFile(selectedRepo.id, file.path))
+                                    performAction(
+                                      getKachinaApi().unstageFile(selectedRepo.id, file.path)
+                                    )
                                   }
                                   disabled={isBusy}
                                 >
@@ -575,7 +594,9 @@ export function App(): JSX.Element {
                               ) : (
                                 <button
                                   onClick={() =>
-                                    performAction(requireApi().stageFile(selectedRepo.id, file.path))
+                                    performAction(
+                                      getKachinaApi().stageFile(selectedRepo.id, file.path)
+                                    )
                                   }
                                   disabled={isBusy}
                                 >

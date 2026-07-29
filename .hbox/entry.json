@@ -1,4 +1,22 @@
 {
   "name": "Kachina",
-  "tags": ["desktop", "git"]
+  "tags": ["desktop", "web", "git"],
+  "defaultAction": "open-kachina",
+  "actions": {
+    "open-kachina": {
+      "label": "Open Kachina",
+      "starts": "kachina-web"
+    }
+  },
+  "sessions": {
+    "kachina-web": {
+      "type": "process",
+      "label": "Kachina",
+      "command": ["npm", "run", "start:web"],
+      "stopCommand": ["npm", "run", "stop:web"],
+      "readyUrl": "http://127.0.0.1:47831/health",
+      "openUrl": "http://127.0.0.1:47831",
+      "singleInstance": true
+    }
+  }
 }

@@ -1,12 +1,16 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, dialog, Menu } from "electron";
 import { JsonStateStore } from "./storage";
 import { RepoService } from "./repo-service";
 import { registerIpcHandlers } from "./ipc";
+import { ElectronDesktopLauncher } from "./electron-desktop-launcher";
+import { BackendInstanceLock } from "./instance-lock";
+import { backendLockPath } from "./app-paths";
 
 let mainWindow: BrowserWindow | null = null;
 let service: RepoService | null = null;
+let backendLock: BackendInstanceLock | null = null;
 
 function resolveWindowIcon(): string | undefined {
   if (process.platform !== "win32") {
@@ -71,8 +75,13 @@ async function createMainWindow(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
-  const store = new JsonStateStore(path.join(app.getPath("userData"), "kachina-state.json"));
-  service = new RepoService(store);
+  const stateFilePath = path.join(app.getPath("userData"), "kachina-state.json");
+  backendLock = await BackendInstanceLock.acquire(
+    backendLockPath(stateFilePath),
+    "Electron"
+  );
+  const store = new JsonStateStore(stateFilePath);
+  service = new RepoService(store, new ElectronDesktopLauncher());
   await service.initialize();
   registerIpcHandlers(service);
   service.startAutoRefresh();
@@ -86,7 +95,13 @@ if (process.platform === "win32") {
 }
 
 app.whenReady().then(() => {
-  void bootstrap();
+  void bootstrap().catch((error: unknown) => {
+    dialog.showErrorBox(
+      "Kachina could not start",
+      error instanceof Error ? error.message : String(error)
+    );
+    app.quit();
+  });
 });
 
 app.on("activate", () => {
@@ -103,4 +118,6 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   service?.dispose();
+  backendLock?.release();
+  backendLock = null;
 });

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { KachinaApi } from "../shared/types";
+import type { KachinaApi, KachinaWindowApi } from "../shared/types";
 
 const api: KachinaApi = {
   getSnapshot: () => ipcRenderer.invoke("kachina:getSnapshot"),
@@ -19,7 +19,10 @@ const api: KachinaApi = {
   openInFileManager: (repoId) => ipcRenderer.invoke("kachina:openInFileManager", repoId),
   openInTerminal: (repoId) => ipcRenderer.invoke("kachina:openInTerminal", repoId),
   cancelRepoOperation: (repoId) =>
-    ipcRenderer.invoke("kachina:cancelRepoOperation", repoId),
+    ipcRenderer.invoke("kachina:cancelRepoOperation", repoId)
+};
+
+const windowApi: KachinaWindowApi = {
   windowMinimize: () => ipcRenderer.invoke("kachina:windowMinimize"),
   windowToggleMaximize: () => ipcRenderer.invoke("kachina:windowToggleMaximize"),
   windowClose: () => ipcRenderer.invoke("kachina:windowClose"),
@@ -35,3 +38,4 @@ const api: KachinaApi = {
 };
 
 contextBridge.exposeInMainWorld("kachinaApi", api);
+contextBridge.exposeInMainWorld("kachinaWindowApi", windowApi);

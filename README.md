@@ -27,6 +27,19 @@ npm run build
 npm run start
 ```
 
+`npm run start` opens the Electron application. The same build can also run as
+a browser application:
+
+```bash
+npm run start:web
+```
+
+The browser host listens only on `http://127.0.0.1:47831`. Kachina's HBOX Entry
+starts this host on demand, waits for it to become ready, and opens it in the
+default browser. `start:web` automatically rebuilds missing or stale output.
+HBOX also shuts the host down when its managed session is stopped. Electron
+and browser mode share the same state, so only one backend can run at a time.
+
 ## Package For Windows
 
 ```powershell
