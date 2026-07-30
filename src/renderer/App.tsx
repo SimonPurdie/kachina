@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
   DashboardSnapshot,
   RepoActionResult,
@@ -8,6 +8,8 @@ import twirlyIcon from "./assets/kachina-twirly-icon.svg";
 import { getKachinaApi } from "./browser-api";
 
 type RepoFilter = "all" | "attention" | "dirty" | "ahead";
+
+const SIMPLE_COMMIT_MESSAGE = "update";
 
 interface SettingsEditor {
   windowsRootsText: string;
@@ -43,6 +45,9 @@ export function App(): JSX.Element {
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [isSettingsPanelAnimating, setIsSettingsPanelAnimating] = useState(false);
+  const [isSimpleCommitDialogOpen, setIsSimpleCommitDialogOpen] = useState(false);
+  const simpleCommitCancelRef = useRef<HTMLButtonElement>(null);
+  const primaryActionButtonRef = useRef<HTMLButtonElement>(null);
 
   const selectedRepo = useMemo(
     () => snapshot?.repos.find((repo) => repo.id === selectedRepoId) ?? null,
@@ -140,6 +145,12 @@ export function App(): JSX.Element {
       window.clearTimeout(timeoutId);
     };
   }, [isSettingsPanelAnimating, isSettingsPanelOpen]);
+
+  useEffect(() => {
+    if (isSimpleCommitDialogOpen) {
+      simpleCommitCancelRef.current?.focus();
+    }
+  }, [isSimpleCommitDialogOpen]);
 
   async function loadSnapshot(): Promise<void> {
     setIsBusy(true);
@@ -258,12 +269,60 @@ export function App(): JSX.Element {
     }
 
     if (selectedRepo.status.changedFiles.length > 0) {
+      if (!commitMessage.trim()) {
+        setIsSimpleCommitDialogOpen(true);
+        return;
+      }
       await performAction(getKachinaApi().commitRepo(selectedRepo.id, commitMessage));
       return;
     }
 
     if (selectedRepo.status.ahead > 0 || selectedRepo.status.behind > 0) {
       await performAction(getKachinaApi().syncRepo(selectedRepo.id));
+    }
+  }
+
+  async function confirmSimpleCommit(): Promise<void> {
+    if (!selectedRepo?.status?.changedFiles.length || isBusy) {
+      setIsSimpleCommitDialogOpen(false);
+      return;
+    }
+
+    setCommitMessage(SIMPLE_COMMIT_MESSAGE);
+    setIsSimpleCommitDialogOpen(false);
+    await performAction(
+      getKachinaApi().commitRepo(selectedRepo.id, SIMPLE_COMMIT_MESSAGE)
+    );
+  }
+
+  function closeSimpleCommitDialog(): void {
+    setIsSimpleCommitDialogOpen(false);
+    window.requestAnimationFrame(() => primaryActionButtonRef.current?.focus());
+  }
+
+  function handleSimpleCommitDialogKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeSimpleCommitDialog();
+      return;
+    }
+
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const buttons = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")
+    );
+    const firstButton = buttons[0];
+    const lastButton = buttons.at(-1);
+
+    if (event.shiftKey && document.activeElement === firstButton) {
+      event.preventDefault();
+      lastButton?.focus();
+    } else if (!event.shiftKey && document.activeElement === lastButton) {
+      event.preventDefault();
+      firstButton?.focus();
     }
   }
 
@@ -552,6 +611,7 @@ export function App(): JSX.Element {
                     />
                     <div className="inline-actions">
                       <button
+                        ref={primaryActionButtonRef}
                         onClick={() => void handlePrimaryRepoAction()}
                         disabled={primaryActionDisabled}
                       >
@@ -699,6 +759,36 @@ export function App(): JSX.Element {
           </aside>
         </main>
       </div>
+
+      {isSimpleCommitDialogOpen && (
+        <div className="modal-backdrop">
+          <div
+            className="confirmation-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="simple-commit-dialog-title"
+            onKeyDown={handleSimpleCommitDialogKeyDown}
+          >
+            <p className="eyebrow">Commit message required</p>
+            <h2 id="simple-commit-dialog-title">
+              Commit with simple message: <span>&quot;update&quot;</span> ?
+            </h2>
+            <div className="confirmation-dialog-actions">
+              <button
+                ref={simpleCommitCancelRef}
+                type="button"
+                className="secondary"
+                onClick={closeSimpleCommitDialog}
+              >
+                Cancel
+              </button>
+              <button type="button" onClick={() => void confirmSimpleCommit()}>
+                Commit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
