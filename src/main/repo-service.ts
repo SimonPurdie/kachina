@@ -642,9 +642,7 @@ exit 127
   }
 
   private async refreshAllInternal(): Promise<void> {
-    if (await this.pruneMissingRepos()) {
-      await this.persist();
-    }
+    await this.pruneMissingRepos();
 
     for (const repo of this.state.repos) {
       try {
@@ -653,7 +651,6 @@ exit 127
           "Refresh",
           async (signal) => {
             await this.refreshRepoDirect(repo, signal);
-            await this.persist();
           },
           60_000
         );
@@ -661,6 +658,8 @@ exit 127
         // Failures are captured in repo status and transcripts.
       }
     }
+
+    await this.persist();
   }
 
   private async runGitAction(
