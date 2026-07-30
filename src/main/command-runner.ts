@@ -1,11 +1,16 @@
 import { spawn } from "node:child_process";
-import type { CommandTranscript, RepoEnvironment } from "../shared/types";
+import type {
+  ActiveCommand,
+  CommandTranscript,
+  RepoEnvironment
+} from "../shared/types";
 
 export interface RunCommandOptions {
   cwd?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
   environment?: RepoEnvironment;
+  onProgress?: (command: ActiveCommand) => void;
 }
 
 export class CommandFailedError extends Error {
@@ -53,6 +58,16 @@ export async function runCommand(
     let stderr = "";
     let timedOut = false;
     let finished = false;
+    const reportProgress = (): void => {
+      options.onProgress?.({
+        command: formatInvocation(command, args),
+        stdout,
+        stderr,
+        startedAt
+      });
+    };
+
+    reportProgress();
 
     const onAbort = (): void => {
       if (finished) {
@@ -71,10 +86,12 @@ export async function runCommand(
 
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
+      reportProgress();
     });
 
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
+      reportProgress();
     });
 
     child.on("error", (error) => {

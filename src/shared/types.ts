@@ -38,10 +38,18 @@ export interface CommandTranscript {
   timedOut: boolean;
 }
 
+export interface ActiveCommand {
+  command: string;
+  stdout: string;
+  stderr: string;
+  startedAt: string;
+}
+
 export interface ActiveOperation {
   id: string;
   name: string;
   startedAt: string;
+  currentCommand: ActiveCommand | null;
 }
 
 export interface ChangedFile {

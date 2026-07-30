@@ -953,6 +953,257 @@ button.secondary {
   background: linear-gradient(180deg, rgba(251, 235, 63, 0.94), rgba(250, 214, 96, 0.94));
 }
 
+.activity-panel {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+  width: min(32rem, calc(100vw - 2rem));
+  border: 2px solid var(--line-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(255, 248, 226, 0.99), rgba(249, 229, 184, 0.99));
+  box-shadow:
+    7px 7px 0 rgba(65, 30, 15, 0.34),
+    var(--panel-inset);
+  animation: activity-panel-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.activity-panel.collapsed {
+  width: min(25rem, calc(100vw - 2rem));
+}
+
+.activity-panel-header {
+  min-height: 3.35rem;
+  padding: 0.58rem 0.62rem 0.58rem 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border-bottom: 2px solid rgba(98, 48, 29, 0.38);
+  background:
+    linear-gradient(105deg, rgba(250, 214, 96, 0.93), rgba(215, 130, 80, 0.94));
+}
+
+.activity-panel.collapsed .activity-panel-header {
+  border-bottom: 0;
+}
+
+.activity-panel-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.62rem;
+}
+
+.activity-panel-heading > div {
+  min-width: 0;
+  display: grid;
+}
+
+.activity-panel-heading strong {
+  overflow: hidden;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-size: 0.98rem;
+  letter-spacing: 0.055em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.activity-status-label {
+  color: rgba(81, 39, 20, 0.72);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.activity-status-mark {
+  width: 0.78rem;
+  height: 0.78rem;
+  flex: 0 0 auto;
+  border: 2px solid var(--choco-2);
+  border-radius: 50%;
+  background: var(--cyan-1);
+  box-shadow: 0 0 0 3px rgba(110, 241, 212, 0.28);
+}
+
+.activity-panel.running .activity-status-mark {
+  border-top-color: transparent;
+  background: transparent;
+  animation: activity-spin 700ms linear infinite;
+}
+
+.activity-panel.error .activity-status-mark {
+  background: #a24731;
+  box-shadow: 0 0 0 3px rgba(162, 71, 49, 0.2);
+}
+
+.activity-panel-controls {
+  display: flex;
+  gap: 0.3rem;
+}
+
+button.activity-panel-control {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-color: rgba(255, 244, 211, 0.72);
+  border-radius: 8px;
+  background: rgba(98, 48, 29, 0.64);
+  box-shadow: 2px 2px 0 rgba(65, 30, 15, 0.25);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.activity-panel-body {
+  padding: 0.58rem;
+}
+
+.activity-summary {
+  min-height: 1.55rem;
+  margin-bottom: 0.48rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow-x: auto;
+  color: var(--ink-soft);
+  font-size: 0.77rem;
+  white-space: nowrap;
+}
+
+.activity-operation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(98, 48, 29, 0.35);
+  border-radius: 999px;
+  padding: 0.2rem 0.48rem;
+  background: rgba(110, 241, 212, 0.25);
+}
+
+.activity-operation span::before {
+  content: "·";
+  margin-right: 0.35rem;
+}
+
+.activity-waiting::after {
+  content: "";
+  display: inline-block;
+  width: 1.1rem;
+  height: 0.25rem;
+  margin-left: 0.35rem;
+  background: radial-gradient(circle, currentcolor 1.5px, transparent 2px) 0 50% / 0.38rem 100%;
+  animation: activity-dots 850ms steps(3) infinite;
+}
+
+.activity-terminal {
+  max-height: min(50vh, 26rem);
+  overflow: auto;
+  border: 2px solid rgba(250, 214, 96, 0.34);
+  border-radius: 9px;
+  padding: 0.6rem;
+  background: linear-gradient(180deg, #402111, #28140b);
+  color: #f6ddbb;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 0.73rem;
+  line-height: 1.42;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.activity-terminal-empty {
+  padding: 0.8rem 0.35rem;
+  color: rgba(246, 221, 187, 0.68);
+  text-align: center;
+}
+
+.activity-command + .activity-command {
+  margin-top: 0.78rem;
+  padding-top: 0.72rem;
+  border-top: 1px solid rgba(250, 214, 96, 0.25);
+}
+
+.activity-command.live {
+  margin-bottom: 0.78rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(110, 241, 212, 0.42);
+  border-radius: 7px;
+  background: rgba(110, 241, 212, 0.07);
+}
+
+.activity-command.live + .activity-command {
+  margin-top: 0;
+}
+
+.activity-command-meta {
+  margin-bottom: 0.22rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--cyan-1);
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.activity-command-meta .ok {
+  color: var(--cyan-1);
+}
+
+.activity-command-meta .failed {
+  color: #ff9272;
+}
+
+.activity-command-meta .running {
+  color: var(--solar-1);
+}
+
+.activity-command-line,
+.activity-command-output {
+  max-height: none;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.activity-command-line {
+  color: #fff3cc;
+}
+
+.activity-command-line span {
+  color: var(--solar-1);
+}
+
+.activity-command-output {
+  margin-top: 0.3rem;
+  color: rgba(246, 221, 187, 0.88);
+}
+
+.activity-command-output.stderr {
+  color: #ffad91;
+}
+
+.activity-command-silent {
+  margin-top: 0.25rem;
+  color: rgba(246, 221, 187, 0.52);
+  font-style: italic;
+}
+
 pre {
   margin: 0.45rem 0 0;
   max-height: 250px;
@@ -1022,6 +1273,34 @@ pre {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes activity-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.975);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes activity-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes activity-dots {
+  0% {
+    width: 0.35rem;
+  }
+
+  100% {
+    width: 1.1rem;
   }
 }
 
@@ -1111,5 +1390,16 @@ pre {
   .settings-cog {
     width: 1.22rem;
     height: 1.22rem;
+  }
+
+  .activity-panel,
+  .activity-panel.collapsed {
+    right: 0.75rem;
+    bottom: 0.75rem;
+    width: calc(100vw - 1.5rem);
+  }
+
+  .activity-terminal {
+    max-height: 42vh;
   }
 }

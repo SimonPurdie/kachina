@@ -8,7 +8,8 @@ import {
   runCommand,
   runGitCommand,
   runWslScript,
-  shellEscape
+  shellEscape,
+  type RunCommandOptions
 } from "./command-runner";
 import { newId } from "./ids";
 import { OperationQueue } from "./operation-queue";
@@ -398,9 +399,8 @@ export class RepoService {
         repo.id,
         "Commit",
         async (signal) => {
-          const statusTranscript = await runGitCommand(
-            repo.environment,
-            repo.path,
+          const statusTranscript = await this.runRepoGitCommand(
+            repo,
             ["status", "--porcelain=v1", "--branch", "-uall"],
             { signal, timeoutMs: 20_000 }
           );
@@ -410,15 +410,14 @@ export class RepoService {
             throw new Error("No changes to commit.");
           }
           if (!parsed.hasStaged) {
-            transcript = await runGitCommand(repo.environment, repo.path, ["add", "-A"], {
+            transcript = await this.runRepoGitCommand(repo, ["add", "-A"], {
               signal,
               timeoutMs: 20_000
             });
             this.pushTranscript(repo, transcript);
           }
-          transcript = await runGitCommand(
-            repo.environment,
-            repo.path,
+          transcript = await this.runRepoGitCommand(
+            repo,
             ["commit", "-m", trimmed],
             { signal, timeoutMs: 45_000 }
           );
@@ -461,7 +460,7 @@ export class RepoService {
           ];
 
           for (const step of steps) {
-            transcript = await runGitCommand(repo.environment, repo.path, step.args, {
+            transcript = await this.runRepoGitCommand(repo, step.args, {
               signal,
               timeoutMs: step.timeoutMs
             });
@@ -670,7 +669,7 @@ exit 127
         repo.id,
         actionName,
         async (signal) => {
-          transcript = await runGitCommand(repo.environment, repo.path, args, {
+          transcript = await this.runRepoGitCommand(repo, args, {
             signal,
             timeoutMs
           });
@@ -732,9 +731,8 @@ exit 127
 
     if (this.state.settings.fetchOnRefresh) {
       try {
-        const transcript = await runGitCommand(
-          repo.environment,
-          repo.path,
+        const transcript = await this.runRepoGitCommand(
+          repo,
           ["fetch", "--all", "--prune", "--quiet"],
           {
             signal,
@@ -751,9 +749,8 @@ exit 127
     }
 
     try {
-      statusTranscript = await runGitCommand(
-        repo.environment,
-        repo.path,
+      statusTranscript = await this.runRepoGitCommand(
+        repo,
         ["status", "--porcelain=v1", "--branch", "-uall"],
         {
           signal,
@@ -824,9 +821,8 @@ exit 127
     signal: AbortSignal
   ): Promise<boolean> {
     try {
-      const transcript = await runGitCommand(
-        repo.environment,
-        repo.path,
+      const transcript = await this.runRepoGitCommand(
+        repo,
         ["rev-parse", "--git-path", gitPathName],
         {
           signal,
@@ -871,6 +867,31 @@ exit 127
       throw new Error("Repository not found.");
     }
     return repo;
+  }
+
+  private async runRepoGitCommand(
+    repo: RepoRecord,
+    args: string[],
+    options: Omit<RunCommandOptions, "cwd" | "environment"> = {}
+  ): Promise<CommandTranscript> {
+    const operationId = repo.activeOperation?.id;
+    try {
+      return await runGitCommand(repo.environment, repo.path, args, {
+        ...options,
+        onProgress: (command) => {
+          const activeOperation = repo.activeOperation;
+          if (operationId && activeOperation?.id === operationId) {
+            activeOperation.currentCommand = command;
+          }
+          options.onProgress?.(command);
+        }
+      });
+    } finally {
+      const activeOperation = repo.activeOperation;
+      if (operationId && activeOperation?.id === operationId) {
+        activeOperation.currentCommand = null;
+      }
+    }
   }
 
   private registerRepo(input: {

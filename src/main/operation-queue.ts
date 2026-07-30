@@ -80,7 +80,8 @@ export class OperationQueue {
     this.callbacks.onStart(task.repoId, {
       id: task.id,
       name: task.name,
-      startedAt: new Date().toISOString()
+      startedAt: new Date().toISOString(),
+      currentCommand: null
     });
 
     const timeout = setTimeout(() => controller.abort(), task.timeoutMs);

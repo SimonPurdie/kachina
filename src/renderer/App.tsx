@@ -1,9 +1,17 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  CommandTranscript,
   DashboardSnapshot,
   RepoActionResult,
   RepoRecord
 } from "../shared/types";
+import {
+  ActivityPanel,
+  type ActivityCommand,
+  type ActivityRepoOperation,
+  type ActivityState,
+  type ActivityStatus
+} from "./ActivityPanel";
 import twirlyIcon from "./assets/kachina-twirly-icon.svg";
 import { getKachinaApi } from "./browser-api";
 
@@ -34,6 +42,15 @@ function formatEnv(repo: RepoRecord): string {
   return `WSL:${repo.environment.distro}`;
 }
 
+function transcriptKey(repoId: string, transcript: CommandTranscript): string {
+  return [
+    repoId,
+    transcript.startedAt,
+    transcript.finishedAt,
+    transcript.command
+  ].join("\u0000");
+}
+
 export function App(): JSX.Element {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
@@ -46,8 +63,13 @@ export function App(): JSX.Element {
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [isSettingsPanelAnimating, setIsSettingsPanelAnimating] = useState(false);
   const [isSimpleCommitDialogOpen, setIsSimpleCommitDialogOpen] = useState(false);
+  const [activity, setActivity] = useState<ActivityState | null>(null);
+  const [isActivityPanelCollapsed, setIsActivityPanelCollapsed] = useState(false);
   const simpleCommitCancelRef = useRef<HTMLButtonElement>(null);
   const primaryActionButtonRef = useRef<HTMLButtonElement>(null);
+  const activitySequenceRef = useRef(0);
+  const activeActivityIdRef = useRef<number | null>(null);
+  const knownActivityTranscriptsRef = useRef<Set<string>>(new Set());
 
   const selectedRepo = useMemo(
     () => snapshot?.repos.find((repo) => repo.id === selectedRepoId) ?? null,
@@ -152,6 +174,142 @@ export function App(): JSX.Element {
     }
   }, [isSimpleCommitDialogOpen]);
 
+  useEffect(() => {
+    if (!activity || activity.status !== "running") {
+      return;
+    }
+
+    let isCancelled = false;
+    const activityId = activity.id;
+
+    const pollActivity = async (): Promise<void> => {
+      try {
+        const next = await getKachinaApi().getSnapshot();
+        if (!isCancelled) {
+          setSnapshot(next);
+          updateActivityFromSnapshot(activityId, next);
+        }
+      } catch {
+        // The action request reports connection failures through its normal result path.
+      }
+    };
+
+    void pollActivity();
+    const intervalId = window.setInterval(() => void pollActivity(), 500);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [activity?.id, activity?.status]);
+
+  function collectActivityCommands(snapshotToRead: DashboardSnapshot): ActivityCommand[] {
+    const commands: ActivityCommand[] = [];
+
+    for (const repo of snapshotToRead.repos) {
+      for (const transcript of repo.transcripts) {
+        const key = transcriptKey(repo.id, transcript);
+        if (knownActivityTranscriptsRef.current.has(key)) {
+          continue;
+        }
+        knownActivityTranscriptsRef.current.add(key);
+        commands.push({
+          ...transcript,
+          key,
+          repoName: repo.displayName
+        });
+      }
+    }
+
+    return commands.sort(
+      (left, right) =>
+        new Date(left.startedAt).getTime() - new Date(right.startedAt).getTime()
+    );
+  }
+
+  function activeRepoOperations(
+    snapshotToRead: DashboardSnapshot
+  ): ActivityRepoOperation[] {
+    return snapshotToRead.repos.flatMap((repo) =>
+      repo.activeOperation
+        ? [
+            {
+              repoId: repo.id,
+              repoName: repo.displayName,
+              name: repo.activeOperation.name,
+              startedAt: repo.activeOperation.startedAt,
+              currentCommand: repo.activeOperation.currentCommand
+            }
+          ]
+        : []
+    );
+  }
+
+  function beginActivity(label: string): number {
+    const id = activitySequenceRef.current + 1;
+    activitySequenceRef.current = id;
+    activeActivityIdRef.current = id;
+    knownActivityTranscriptsRef.current = new Set(
+      (snapshot?.repos ?? []).flatMap((repo) =>
+        repo.transcripts.map((transcript) => transcriptKey(repo.id, transcript))
+      )
+    );
+    setActivity({
+      id,
+      label,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      status: "running",
+      commands: [],
+      activeOperations: []
+    });
+    setIsActivityPanelCollapsed(false);
+    return id;
+  }
+
+  function updateActivityFromSnapshot(
+    activityId: number,
+    next: DashboardSnapshot
+  ): void {
+    if (activeActivityIdRef.current !== activityId) {
+      return;
+    }
+    const commands = collectActivityCommands(next);
+    const activeOperations = activeRepoOperations(next);
+    setActivity((current) =>
+      current?.id === activityId
+        ? {
+            ...current,
+            commands: [...current.commands, ...commands],
+            activeOperations
+          }
+        : current
+    );
+  }
+
+  function finishActivity(
+    activityId: number,
+    status: Exclude<ActivityStatus, "running">,
+    finalSnapshot?: DashboardSnapshot
+  ): void {
+    if (activeActivityIdRef.current !== activityId) {
+      return;
+    }
+    const commands = finalSnapshot ? collectActivityCommands(finalSnapshot) : [];
+    activeActivityIdRef.current = null;
+    setActivity((current) =>
+      current?.id === activityId
+        ? {
+            ...current,
+            status,
+            finishedAt: new Date().toISOString(),
+            commands: [...current.commands, ...commands],
+            activeOperations: []
+          }
+        : current
+    );
+  }
+
   async function loadSnapshot(): Promise<void> {
     setIsBusy(true);
     try {
@@ -167,37 +325,50 @@ export function App(): JSX.Element {
   }
 
   async function refreshAll(): Promise<void> {
+    const activityId = beginActivity("Refresh All");
     setIsBusy(true);
     try {
       const next = await getKachinaApi().refreshAll();
       setSnapshot(next);
       setMessage("Refreshed all repositories.");
+      finishActivity(activityId, "success", next);
     } catch (error) {
       setMessage(`Refresh failed: ${(error as Error).message}`);
+      finishActivity(activityId, "error");
     } finally {
       setIsBusy(false);
     }
   }
 
   async function scanConfiguredRoots(): Promise<void> {
+    const activityId = beginActivity("Scan Roots");
     setIsBusy(true);
     try {
       const next = await getKachinaApi().scanConfiguredRoots();
       setSnapshot(next);
       setMessage("Scan complete.");
+      finishActivity(activityId, "success", next);
     } catch (error) {
       setMessage(`Scan failed: ${(error as Error).message}`);
+      finishActivity(activityId, "error");
     } finally {
       setIsBusy(false);
     }
   }
 
-  async function performAction(action: Promise<RepoActionResult>): Promise<void> {
+  async function performAction(
+    action: Promise<RepoActionResult>,
+    activityLabel?: string
+  ): Promise<void> {
+    const activityId = activityLabel ? beginActivity(activityLabel) : null;
     setIsBusy(true);
     try {
       const result = await action;
       setSnapshot(result.snapshot);
       setMessage(result.message);
+      if (activityId !== null) {
+        finishActivity(activityId, result.ok ? "success" : "error", result.snapshot);
+      }
       if (!result.ok) {
         return;
       }
@@ -206,6 +377,9 @@ export function App(): JSX.Element {
       }
     } catch (error) {
       setMessage((error as Error).message);
+      if (activityId !== null) {
+        finishActivity(activityId, "error");
+      }
     } finally {
       setIsBusy(false);
     }
@@ -273,12 +447,18 @@ export function App(): JSX.Element {
         setIsSimpleCommitDialogOpen(true);
         return;
       }
-      await performAction(getKachinaApi().commitRepo(selectedRepo.id, commitMessage));
+      await performAction(
+        getKachinaApi().commitRepo(selectedRepo.id, commitMessage),
+        `Commit · ${selectedRepo.displayName}`
+      );
       return;
     }
 
     if (selectedRepo.status.ahead > 0 || selectedRepo.status.behind > 0) {
-      await performAction(getKachinaApi().syncRepo(selectedRepo.id));
+      await performAction(
+        getKachinaApi().syncRepo(selectedRepo.id),
+        `Sync · ${selectedRepo.displayName}`
+      );
     }
   }
 
@@ -291,7 +471,8 @@ export function App(): JSX.Element {
     setCommitMessage(SIMPLE_COMMIT_MESSAGE);
     setIsSimpleCommitDialogOpen(false);
     await performAction(
-      getKachinaApi().commitRepo(selectedRepo.id, SIMPLE_COMMIT_MESSAGE)
+      getKachinaApi().commitRepo(selectedRepo.id, SIMPLE_COMMIT_MESSAGE),
+      `Commit · ${selectedRepo.displayName}`
     );
   }
 
@@ -644,7 +825,8 @@ export function App(): JSX.Element {
                                 <button
                                   onClick={() =>
                                     performAction(
-                                      getKachinaApi().unstageFile(selectedRepo.id, file.path)
+                                      getKachinaApi().unstageFile(selectedRepo.id, file.path),
+                                      `Unstage · ${selectedRepo.displayName}`
                                     )
                                   }
                                   disabled={isBusy}
@@ -655,7 +837,8 @@ export function App(): JSX.Element {
                                 <button
                                   onClick={() =>
                                     performAction(
-                                      getKachinaApi().stageFile(selectedRepo.id, file.path)
+                                      getKachinaApi().stageFile(selectedRepo.id, file.path),
+                                      `Stage · ${selectedRepo.displayName}`
                                     )
                                   }
                                   disabled={isBusy}
@@ -788,6 +971,15 @@ export function App(): JSX.Element {
             </div>
           </div>
         </div>
+      )}
+
+      {activity && (
+        <ActivityPanel
+          activity={activity}
+          isCollapsed={isActivityPanelCollapsed}
+          onToggleCollapsed={() => setIsActivityPanelCollapsed((current) => !current)}
+          onDismiss={() => setActivity(null)}
+        />
       )}
     </div>
   );
