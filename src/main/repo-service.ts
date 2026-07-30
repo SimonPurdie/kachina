@@ -314,8 +314,6 @@ export class RepoService {
   }
 
   async scanConfiguredRoots(): Promise<DashboardSnapshot> {
-    await this.pruneMissingRepos();
-
     const discovered: Array<{
       path: string;
       environment: RepoEnvironment;
