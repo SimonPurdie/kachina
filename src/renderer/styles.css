@@ -631,6 +631,7 @@ button.settings-toggle.animating .settings-cog {
   box-shadow: none;
   padding-left: 0;
   padding-right: 0;
+  height: 0;
 }
 
 .settings-panel .card {
@@ -1106,7 +1107,7 @@ button.activity-panel-control {
 .activity-summary {
   min-height: 1.55rem;
   margin-bottom: 0.48rem;
-  display: flex;
+  display: none;
   align-items: center;
   gap: 0.4rem;
   overflow-x: auto;
@@ -1141,7 +1142,7 @@ button.activity-panel-control {
 }
 
 .activity-terminal {
-  max-height: min(50vh, 26rem);
+  max-height: min(50vh, 16rem);
   overflow: auto;
   border: 2px solid rgba(250, 214, 96, 0.34);
   border-radius: 9px;
