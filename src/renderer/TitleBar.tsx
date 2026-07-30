@@ -61,10 +61,10 @@ export function TitleBar(props: TitleBarProps): JSX.Element {
               : props.shutdownState === "stopping"
                 ? "Stopping Kachina server"
                 : props.shutdownState === "stopped"
-                  ? "Kachina server stopped"
+                  ? "Close tab"
                   : "Stop Kachina server"
           }
-          disabled={!isElectron && props.shutdownState !== "running"}
+          disabled={!isElectron && props.shutdownState === "stopping"}
           onClick={props.onClose}
         >
           <span className="window-control-icon close" />

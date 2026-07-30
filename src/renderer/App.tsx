@@ -539,7 +539,14 @@ export function App(): JSX.Element {
       await rendererHost.close();
       return;
     }
-    if (webShutdownState !== "running") {
+    if (
+      webShutdownState === "local-fallback" ||
+      webShutdownState === "remote-stopped"
+    ) {
+      window.close();
+      return;
+    }
+    if (webShutdownState === "stopping") {
       return;
     }
 
