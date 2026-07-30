@@ -12,8 +12,17 @@ const rendererEntry = path.join(projectDirectory, "dist", "index.html");
 
 if (buildIsMissingOrStale()) {
   console.log("Kachina build output is missing or stale; building it now...");
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-  const result = spawnSync(npmCommand, ["run", "build"], {
+  const buildCommand =
+    process.platform === "win32"
+      ? {
+          executable: process.env.ComSpec ?? "cmd.exe",
+          args: ["/d", "/s", "/c", "npm.cmd run build"]
+        }
+      : {
+          executable: "npm",
+          args: ["run", "build"]
+        };
+  const result = spawnSync(buildCommand.executable, buildCommand.args, {
     cwd: projectDirectory,
     stdio: "inherit"
   });
