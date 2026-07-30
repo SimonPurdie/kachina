@@ -12,8 +12,9 @@ import {
   type ActivityState,
   type ActivityStatus
 } from "./ActivityPanel";
-import twirlyIcon from "./assets/kachina-twirly-icon.svg";
 import { getKachinaApi } from "./browser-api";
+import { closeWebHost, getRendererHost } from "./renderer-host";
+import { TitleBar } from "./TitleBar";
 
 type RepoFilter = "all" | "attention" | "dirty" | "ahead";
 
@@ -65,11 +66,14 @@ export function App(): JSX.Element {
   const [isSimpleCommitDialogOpen, setIsSimpleCommitDialogOpen] = useState(false);
   const [activity, setActivity] = useState<ActivityState | null>(null);
   const [isActivityPanelCollapsed, setIsActivityPanelCollapsed] = useState(false);
+  const [isWebShuttingDown, setIsWebShuttingDown] = useState(false);
+  const [hasWebShutdown, setHasWebShutdown] = useState(false);
   const simpleCommitCancelRef = useRef<HTMLButtonElement>(null);
   const primaryActionButtonRef = useRef<HTMLButtonElement>(null);
   const activitySequenceRef = useRef(0);
   const activeActivityIdRef = useRef<number | null>(null);
   const knownActivityTranscriptsRef = useRef<Set<string>>(new Set());
+  const rendererHost = useMemo(() => getRendererHost(), []);
 
   const selectedRepo = useMemo(
     () => snapshot?.repos.find((repo) => repo.id === selectedRepoId) ?? null,
@@ -106,21 +110,18 @@ export function App(): JSX.Element {
   const primaryActionDisabled = isBusy || (!hasChangedFiles && !needsSync);
   const statusMessage = message || "Let's go, Twirly!";
   const isPlaceholderMessage = !message;
-  const isElectronHost = Boolean(window.kachinaWindowApi);
-
   useEffect(() => {
     let isMounted = true;
-    const windowApi = window.kachinaWindowApi;
 
     void loadSnapshot();
-    if (!windowApi) {
+    if (rendererHost.kind !== "electron") {
       return () => {
         isMounted = false;
       };
     }
 
-    void windowApi
-      .isWindowMaximized()
+    void rendererHost
+      .isMaximized()
       .then((next) => {
         if (isMounted) {
           setIsWindowMaximized(next);
@@ -132,7 +133,7 @@ export function App(): JSX.Element {
         }
       });
 
-    const dispose = windowApi.onWindowStateChanged((next) => {
+    const dispose = rendererHost.onWindowStateChanged((next) => {
       setIsWindowMaximized(next);
     });
 
@@ -140,7 +141,7 @@ export function App(): JSX.Element {
       isMounted = false;
       dispose();
     };
-  }, []);
+  }, [rendererHost]);
 
   useEffect(() => {
     if (!snapshot) {
@@ -508,19 +509,39 @@ export function App(): JSX.Element {
   }
 
   async function handleWindowMinimize(): Promise<void> {
-    await window.kachinaWindowApi?.windowMinimize();
+    if (rendererHost.kind === "electron") {
+      await rendererHost.minimize();
+    }
   }
 
   async function handleWindowToggleMaximize(): Promise<void> {
-    const next = await window.kachinaWindowApi?.windowToggleMaximize();
-    if (next === undefined) {
+    if (rendererHost.kind !== "electron") {
       return;
     }
+    const next = await rendererHost.toggleMaximize();
     setIsWindowMaximized(next);
   }
 
   async function handleWindowClose(): Promise<void> {
-    await window.kachinaWindowApi?.windowClose();
+    if (rendererHost.kind === "electron") {
+      await rendererHost.close();
+      return;
+    }
+    if (isWebShuttingDown || hasWebShutdown) {
+      return;
+    }
+
+    setIsWebShuttingDown(true);
+    try {
+      await closeWebHost(
+        rendererHost,
+        () => window.close(),
+        () => setHasWebShutdown(true)
+      );
+    } catch (error) {
+      setIsWebShuttingDown(false);
+      setMessage(`Could not stop Kachina: ${(error as Error).message}`);
+    }
   }
 
   function handleSettingsToggle(): void {
@@ -529,46 +550,21 @@ export function App(): JSX.Element {
   }
 
   return (
-    <div className="app-shell">
-      {isElectronHost && (
-        <header className="window-titlebar">
-          <div className="window-titlebar-brand">
-            <img src={twirlyIcon} alt="" aria-hidden="true" className="window-titlebar-icon" />
-            <div className="window-titlebar-copy">
-              <strong>Kachina</strong>
-            </div>
-          </div>
-          <div className="window-titlebar-controls">
-            <button
-              type="button"
-              className="window-control"
-              aria-label="Minimize window"
-              onClick={() => void handleWindowMinimize()}
-            >
-              <span className="window-control-icon minimize" />
-            </button>
-            <button
-              type="button"
-              className="window-control"
-              aria-label={isWindowMaximized ? "Restore window" : "Maximize window"}
-              onClick={() => void handleWindowToggleMaximize()}
-            >
-              <span
-                className={`window-control-icon ${
-                  isWindowMaximized ? "restore" : "maximize"
-                }`}
-              />
-            </button>
-            <button
-              type="button"
-              className="window-control close"
-              aria-label="Close window"
-              onClick={() => void handleWindowClose()}
-            >
-              <span className="window-control-icon close" />
-            </button>
-          </div>
-        </header>
+    <div className={`app-shell${hasWebShutdown ? " web-shutdown" : ""}`}>
+      {rendererHost.kind === "electron" ? (
+        <TitleBar
+          hostKind="electron"
+          isMaximized={isWindowMaximized}
+          onMinimize={() => void handleWindowMinimize()}
+          onToggleMaximize={() => void handleWindowToggleMaximize()}
+          onClose={() => void handleWindowClose()}
+        />
+      ) : (
+        <TitleBar
+          hostKind="web"
+          isClosing={isWebShuttingDown}
+          onClose={() => void handleWindowClose()}
+        />
       )}
 
       <div className="app-content">
@@ -980,6 +976,12 @@ export function App(): JSX.Element {
           onToggleCollapsed={() => setIsActivityPanelCollapsed((current) => !current)}
           onDismiss={() => setActivity(null)}
         />
+      )}
+
+      {hasWebShutdown && (
+        <div className="web-shutdown-overlay" role="status" aria-live="assertive">
+          <div className="web-shutdown-message">You can now close the tab</div>
+        </div>
       )}
     </div>
   );
