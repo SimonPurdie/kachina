@@ -35,18 +35,20 @@ async function bootstrap(): Promise<void> {
     await service.initialize();
     service.startAutoRefresh();
 
-    const server = createKachinaWebServer(service, {
+    const webServer = createKachinaWebServer(service, {
       host: HOST,
       port,
       staticDirectory: path.join(__dirname, "../../dist"),
       requestShutdown: shutdown
     });
+    const { server } = webServer;
 
     function shutdown(): void {
       if (shuttingDown) {
         return;
       }
       shuttingDown = true;
+      webServer.announceShutdown();
       service.dispose();
       server.close(() => {
         lock.release();

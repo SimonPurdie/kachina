@@ -23,10 +23,15 @@ export interface KachinaWebServerOptions {
   requestShutdown: () => void;
 }
 
+export interface KachinaWebServer {
+  server: http.Server;
+  announceShutdown: () => void;
+}
+
 export function createKachinaWebServer(
   service: RepoService,
   options: KachinaWebServerOptions
-): http.Server {
+): KachinaWebServer {
   const staticDirectory = path.resolve(options.staticDirectory);
   const allowedHosts = new Set([
     `${options.host}:${options.port}`.toLowerCase(),
@@ -36,13 +41,15 @@ export function createKachinaWebServer(
     `http://${options.host}:${options.port}`.toLowerCase(),
     `http://localhost:${options.port}`.toLowerCase()
   ]);
+  const shutdownEvents = createShutdownEvents();
 
-  return http.createServer((request, response) => {
+  const server = http.createServer((request, response) => {
     void handleRequest(
       service,
       staticDirectory,
       allowedHosts,
       allowedOrigins,
+      shutdownEvents,
       options.requestShutdown,
       request,
       response
@@ -56,6 +63,11 @@ export function createKachinaWebServer(
       });
     });
   });
+
+  return {
+    server,
+    announceShutdown: shutdownEvents.announce
+  };
 }
 
 async function handleRequest(
@@ -63,6 +75,7 @@ async function handleRequest(
   staticDirectory: string,
   allowedHosts: ReadonlySet<string>,
   allowedOrigins: ReadonlySet<string>,
+  shutdownEvents: ShutdownEvents,
   requestShutdown: () => void,
   request: IncomingMessage,
   response: ServerResponse
@@ -85,6 +98,11 @@ async function handleRequest(
     return;
   }
 
+  if (requestUrl.pathname === "/api/events") {
+    handleEventStream(allowedOrigins, shutdownEvents, request, response);
+    return;
+  }
+
   if (requestUrl.pathname === "/api/invoke") {
     await handleApiRequest(service, allowedOrigins, request, response);
     return;
@@ -102,6 +120,69 @@ async function handleRequest(
   }
 
   await serveStaticFile(staticDirectory, requestUrl.pathname, request, response);
+}
+
+interface ShutdownEvents {
+  subscribe: (response: ServerResponse) => void;
+  announce: () => void;
+}
+
+function createShutdownEvents(): ShutdownEvents {
+  const subscribers = new Set<ServerResponse>();
+  let announced = false;
+
+  return {
+    subscribe(response): void {
+      if (announced) {
+        response.end(shutdownEvent());
+        return;
+      }
+      subscribers.add(response);
+      response.once("close", () => {
+        subscribers.delete(response);
+      });
+    },
+    announce(): void {
+      if (announced) {
+        return;
+      }
+      announced = true;
+      for (const response of subscribers) {
+        response.end(shutdownEvent());
+      }
+      subscribers.clear();
+    }
+  };
+}
+
+function handleEventStream(
+  allowedOrigins: ReadonlySet<string>,
+  shutdownEvents: ShutdownEvents,
+  request: IncomingMessage,
+  response: ServerResponse
+): void {
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed." });
+    return;
+  }
+
+  const origin = request.headers.origin?.toLowerCase();
+  if (origin && !allowedOrigins.has(origin)) {
+    sendJson(response, 403, { error: "Origin is not allowed." });
+    return;
+  }
+
+  response.statusCode = 200;
+  response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  response.setHeader("Cache-Control", "no-cache, no-store");
+  response.setHeader("Connection", "keep-alive");
+  response.flushHeaders();
+  response.write(": connected\n\n");
+  shutdownEvents.subscribe(response);
+}
+
+function shutdownEvent(): string {
+  return 'event: shutdown\ndata: {"status":"shut-down"}\n\n';
 }
 
 async function handleApiRequest(

@@ -17,6 +17,7 @@ import { closeWebHost, getRendererHost } from "./renderer-host";
 import { TitleBar } from "./TitleBar";
 
 type RepoFilter = "all" | "attention" | "dirty" | "ahead";
+type WebShutdownState = "running" | "stopping" | "local-fallback" | "remote-stopped";
 
 const SIMPLE_COMMIT_MESSAGE = "update";
 
@@ -66,13 +67,13 @@ export function App(): JSX.Element {
   const [isSimpleCommitDialogOpen, setIsSimpleCommitDialogOpen] = useState(false);
   const [activity, setActivity] = useState<ActivityState | null>(null);
   const [isActivityPanelCollapsed, setIsActivityPanelCollapsed] = useState(false);
-  const [isWebShuttingDown, setIsWebShuttingDown] = useState(false);
-  const [hasWebShutdown, setHasWebShutdown] = useState(false);
+  const [webShutdownState, setWebShutdownState] = useState<WebShutdownState>("running");
   const simpleCommitCancelRef = useRef<HTMLButtonElement>(null);
   const primaryActionButtonRef = useRef<HTMLButtonElement>(null);
   const activitySequenceRef = useRef(0);
   const activeActivityIdRef = useRef<number | null>(null);
   const knownActivityTranscriptsRef = useRef<Set<string>>(new Set());
+  const webShutdownInitiatedRef = useRef(false);
   const rendererHost = useMemo(() => getRendererHost(), []);
 
   const selectedRepo = useMemo(
@@ -141,6 +142,17 @@ export function App(): JSX.Element {
       isMounted = false;
       dispose();
     };
+  }, [rendererHost]);
+
+  useEffect(() => {
+    if (rendererHost.kind !== "web") {
+      return;
+    }
+    return rendererHost.onShutdown(() => {
+      if (!webShutdownInitiatedRef.current) {
+        setWebShutdownState("remote-stopped");
+      }
+    });
   }, [rendererHost]);
 
   useEffect(() => {
@@ -527,19 +539,21 @@ export function App(): JSX.Element {
       await rendererHost.close();
       return;
     }
-    if (isWebShuttingDown || hasWebShutdown) {
+    if (webShutdownState !== "running") {
       return;
     }
 
-    setIsWebShuttingDown(true);
+    webShutdownInitiatedRef.current = true;
+    setWebShutdownState("stopping");
     try {
       await closeWebHost(
         rendererHost,
         () => window.close(),
-        () => setHasWebShutdown(true)
+        () => setWebShutdownState("local-fallback")
       );
     } catch (error) {
-      setIsWebShuttingDown(false);
+      webShutdownInitiatedRef.current = false;
+      setWebShutdownState("running");
       setMessage(`Could not stop Kachina: ${(error as Error).message}`);
     }
   }
@@ -550,7 +564,13 @@ export function App(): JSX.Element {
   }
 
   return (
-    <div className={`app-shell${hasWebShutdown ? " web-shutdown" : ""}`}>
+    <div
+      className={`app-shell${
+        webShutdownState === "local-fallback" || webShutdownState === "remote-stopped"
+          ? " web-shutdown"
+          : ""
+      }`}
+    >
       {rendererHost.kind === "electron" ? (
         <TitleBar
           hostKind="electron"
@@ -562,7 +582,11 @@ export function App(): JSX.Element {
       ) : (
         <TitleBar
           hostKind="web"
-          isClosing={isWebShuttingDown}
+          shutdownState={
+            webShutdownState === "local-fallback" || webShutdownState === "remote-stopped"
+              ? "stopped"
+              : webShutdownState
+          }
           onClose={() => void handleWindowClose()}
         />
       )}
@@ -978,9 +1002,14 @@ export function App(): JSX.Element {
         />
       )}
 
-      {hasWebShutdown && (
+      {(webShutdownState === "local-fallback" ||
+        webShutdownState === "remote-stopped") && (
         <div className="web-shutdown-overlay" role="status" aria-live="assertive">
-          <div className="web-shutdown-message">You can now close the tab</div>
+          <div className="web-shutdown-message">
+            {webShutdownState === "remote-stopped"
+              ? "Kachina has been shut down. You can now close this tab."
+              : "You can now close the tab"}
+          </div>
         </div>
       )}
     </div>

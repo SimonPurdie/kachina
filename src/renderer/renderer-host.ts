@@ -16,9 +16,17 @@ export interface ElectronRendererHost {
 export interface WebRendererHost {
   kind: "web";
   close: () => Promise<void>;
+  onShutdown: (listener: () => void) => () => void;
 }
 
 export type RendererHost = ElectronRendererHost | WebRendererHost;
+
+interface ShutdownEventSource {
+  addEventListener: (type: "shutdown", listener: () => void) => void;
+  close: () => void;
+}
+
+type ShutdownEventSourceFactory = (url: string) => ShutdownEventSource;
 
 export async function closeWebHost(
   host: WebRendererHost,
@@ -57,12 +65,27 @@ export async function requestWebShutdown(
   throw new Error(message);
 }
 
+export function subscribeToWebShutdown(
+  listener: () => void,
+  createEventSource: ShutdownEventSourceFactory = (url) => new EventSource(url)
+): () => void {
+  const eventSource = createEventSource("/api/events");
+  eventSource.addEventListener("shutdown", () => {
+    eventSource.close();
+    listener();
+  });
+  return () => {
+    eventSource.close();
+  };
+}
+
 export function getRendererHost(): RendererHost {
   const windowApi = window.kachinaWindowApi;
   if (!windowApi) {
     return {
       kind: "web",
-      close: () => requestWebShutdown()
+      close: () => requestWebShutdown(),
+      onShutdown: (listener) => subscribeToWebShutdown(listener)
     };
   }
 

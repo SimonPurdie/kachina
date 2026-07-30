@@ -12,7 +12,7 @@ type TitleBarProps =
   | {
       hostKind: "web";
       isMaximized?: false;
-      isClosing: boolean;
+      shutdownState: "running" | "stopping" | "stopped";
       onClose: () => void;
     };
 
@@ -58,11 +58,13 @@ export function TitleBar(props: TitleBarProps): JSX.Element {
           aria-label={
             isElectron
               ? "Close window"
-              : props.isClosing
+              : props.shutdownState === "stopping"
                 ? "Stopping Kachina server"
-                : "Stop Kachina server"
+                : props.shutdownState === "stopped"
+                  ? "Kachina server stopped"
+                  : "Stop Kachina server"
           }
-          disabled={!isElectron && props.isClosing}
+          disabled={!isElectron && props.shutdownState !== "running"}
           onClick={props.onClose}
         >
           <span className="window-control-icon close" />
