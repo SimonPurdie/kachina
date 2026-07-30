@@ -64,6 +64,15 @@ function parseChangedPath(raw: string): string {
   return raw.slice(arrowIndex + 4);
 }
 
+function escapeFindPattern(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("*", "\\*")
+    .replaceAll("?", "\\?")
+    .replaceAll("[", "\\[")
+    .replaceAll("]", "\\]");
+}
+
 function parseStatusOutput(stdout: string): Omit<RepoStatusSummary, "refreshedAt" | "mergeInProgress" | "rebaseInProgress" | "inaccessible"> {
   const lines = stdout.split(/\r?\n/).filter(Boolean);
   const header = lines.find((line) => line.startsWith("## ")) ?? "## HEAD (no branch)";
@@ -1136,9 +1145,17 @@ exit 127
       return [];
     }
 
+    const ignoredPaths = this.state.settings.ignorePatterns
+      .map((pattern) => pattern.trim())
+      .filter(Boolean)
+      .map((pattern) => `-ipath ${shellEscape(`*${escapeFindPattern(pattern)}*`)}`);
+    const ignorePrune =
+      ignoredPaths.length > 0
+        ? `\\( ${ignoredPaths.join(" -o ")} \\) -prune -o `
+        : "";
     const script = `if [ -d ${shellEscape(root)} ]; then find ${shellEscape(
       root
-    )} -type d -name .git -prune 2>/dev/null; fi`;
+    )} ${ignorePrune}-type d -name .git -prune -print 2>/dev/null; fi`;
     try {
       const transcript = await runWslScript(distro, script, { timeoutMs: 90_000 });
       return transcript.stdout
