@@ -766,10 +766,8 @@ exit 127
       );
       this.pushTranscript(repo, statusTranscript);
       const parsed = parseStatusOutput(statusTranscript.stdout);
-      const mergeInProgress = await this.gitPathExists(repo, "MERGE_HEAD", "any", signal);
-      const rebaseInProgress =
-        (await this.gitPathExists(repo, "rebase-merge", "dir", signal)) ||
-        (await this.gitPathExists(repo, "rebase-apply", "dir", signal));
+      const { mergeInProgress, rebaseInProgress } =
+        await this.detectRepositoryOperationState(repo, signal);
 
       repo.status = {
         ...parsed,
@@ -821,50 +819,88 @@ exit 127
     }
   }
 
-  private async gitPathExists(
+  private async detectRepositoryOperationState(
     repo: RepoRecord,
-    gitPathName: string,
-    pathType: "any" | "dir",
     signal: AbortSignal
-  ): Promise<boolean> {
+  ): Promise<{ mergeInProgress: boolean; rebaseInProgress: boolean }> {
+    const noOperation = {
+      mergeInProgress: false,
+      rebaseInProgress: false
+    };
+
     try {
       const transcript = await this.runRepoGitCommand(
         repo,
-        ["rev-parse", "--git-path", gitPathName],
+        [
+          "rev-parse",
+          "--git-path",
+          "MERGE_HEAD",
+          "--git-path",
+          "rebase-merge",
+          "--git-path",
+          "rebase-apply"
+        ],
         {
           signal,
           timeoutMs: 10_000
         }
       );
-      const resolvedPath = transcript.stdout.trim();
-      if (!resolvedPath) {
-        return false;
+      const [mergePath, rebaseMergePath, rebaseApplyPath] = transcript.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (!mergePath || !rebaseMergePath || !rebaseApplyPath) {
+        return noOperation;
       }
 
       if (repo.environment.kind === "windows") {
-        const absolutePath = path.isAbsolute(resolvedPath)
-          ? resolvedPath
-          : path.join(repo.path, resolvedPath);
-        try {
-          const stats = await fs.stat(absolutePath);
-          return pathType === "dir" ? stats.isDirectory() : true;
-        } catch {
-          return false;
-        }
+        const pathExists = async (
+          resolvedPath: string,
+          pathType: "any" | "dir"
+        ): Promise<boolean> => {
+          const absolutePath = path.isAbsolute(resolvedPath)
+            ? resolvedPath
+            : path.join(repo.path, resolvedPath);
+          try {
+            const stats = await fs.stat(absolutePath);
+            return pathType === "dir" ? stats.isDirectory() : true;
+          } catch {
+            return false;
+          }
+        };
+        const [mergeInProgress, rebaseMergeInProgress, rebaseApplyInProgress] =
+          await Promise.all([
+            pathExists(mergePath, "any"),
+            pathExists(rebaseMergePath, "dir"),
+            pathExists(rebaseApplyPath, "dir")
+          ]);
+        return {
+          mergeInProgress,
+          rebaseInProgress: rebaseMergeInProgress || rebaseApplyInProgress
+        };
       }
 
-      const testFlag = pathType === "dir" ? "-d" : "-e";
-      await runWslScript(
+      const probe = await runWslScript(
         repo.environment.distro,
-        `cd ${shellEscape(repo.path)} && [ ${testFlag} ${shellEscape(resolvedPath)} ]`,
+        [
+          `cd ${shellEscape(repo.path)} && {`,
+          `if [ -e ${shellEscape(mergePath)} ]; then printf '1'; else printf '0'; fi;`,
+          `if [ -d ${shellEscape(rebaseMergePath)} ]; then printf '1'; else printf '0'; fi;`,
+          `if [ -d ${shellEscape(rebaseApplyPath)} ]; then printf '1'; else printf '0'; fi;`,
+          "}"
+        ].join(" "),
         {
           signal,
           timeoutMs: 10_000
         }
       );
-      return true;
+      const flags = probe.stdout.trim();
+      return {
+        mergeInProgress: flags[0] === "1",
+        rebaseInProgress: flags[1] === "1" || flags[2] === "1"
+      };
     } catch {
-      return false;
+      return noOperation;
     }
   }
 
