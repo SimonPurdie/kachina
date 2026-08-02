@@ -310,6 +310,7 @@ export function App(): JSX.Element {
     }
     const commands = finalSnapshot ? collectActivityCommands(finalSnapshot) : [];
     activeActivityIdRef.current = null;
+    setIsActivityPanelCollapsed(true);
     setActivity((current) =>
       current?.id === activityId
         ? {
